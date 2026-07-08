@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
@@ -51,69 +52,122 @@ func main() {
 func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.HTTPCheck, resolver string) checker.RunResult {
 	rr := checker.RunResult{Domain: domain}
 
+	// Run DNS checks
 	if dnsChecks != nil {
 		if dnsChecks.A || dnsChecks.AAAA {
 			c := dns.New(resolver)
 			c.CheckA = dnsChecks.A
 			c.CheckAAAA = dnsChecks.AAAA
-			res, err := c.Check(domain)
+			results, err := c.Check(domain)
 			if err != nil {
-				res = &checker.Result{
+				results = []*checker.Result{{
 					Checker: c.Name(),
 					Domain:  domain,
 					Passed:  false,
 					Details: fmt.Sprintf("error: %v", err),
-				}
+				}}
 			}
-			rr.Results = append(rr.Results, res)
+			rr.Results = append(rr.Results, results...)
 		}
 
 		if dnsChecks.HTTPS {
 			c := dns.NewHTTPSChecker(resolver)
-			res, err := c.Check(domain)
+			results, err := c.Check(domain)
 			if err != nil {
-				res = &checker.Result{
+				results = []*checker.Result{{
 					Checker: c.Name(),
 					Domain:  domain,
 					Passed:  false,
 					Details: fmt.Sprintf("error: %v", err),
-				}
+				}}
 			}
-			rr.Results = append(rr.Results, res)
+			rr.Results = append(rr.Results, results...)
 		}
 
 		if dnsChecks.Consistency {
-			res, err := dns.ConsistencyCheck(domain, resolver)
+			results, err := dns.ConsistencyCheck(domain, resolver)
 			if err != nil {
-				res = &checker.Result{
+				results = []*checker.Result{{
 					Checker: "dns-consistency",
 					Domain:  domain,
 					Passed:  false,
 					Details: fmt.Sprintf("error: %v", err),
+				}}
+			}
+			rr.Results = append(rr.Results, results...)
+		}
+	}
+
+	// Run HTTP checks
+	// First check if HTTP/3 should be tested
+	shouldTestH3 := false
+	for _, hc := range httpChecks {
+		if hc.Protocol == "http3" {
+			shouldTestH3 = true
+			break
+		}
+	}
+
+	if shouldTestH3 {
+		// Check if domain has HTTPS DNS record
+		hasHTTPSRecord := dns.HasHTTPSRecord(domain, resolver)
+
+		// Also check Alt-Svc header from HTTP/2 response
+		altSvc := getAltSvcFromHTTP2(domain, resolver)
+
+		if !hasHTTPSRecord && !strings.Contains(altSvc, "h3") {
+			// Skip HTTP/3 - no support detected
+			for _, hc := range httpChecks {
+				if hc.Protocol == "http3" {
+					rr.Results = append(rr.Results, &checker.Result{
+						Checker: fmt.Sprintf("https-http3"),
+						Domain:  domain,
+						Passed:  false,
+						Details: "skipped: no HTTPS DNS record and no Alt-Svc h3 support",
+					})
 				}
 			}
-			rr.Results = append(rr.Results, res)
 		}
 	}
 
 	for _, hc := range httpChecks {
+		// Skip HTTP/3 if no support detected
+		if hc.Protocol == "http3" && !shouldTestH3 {
+			continue
+		}
+
 		c := &httpchecker.HTTPChecker{
 			Protocol: hc.Protocol,
-			IP:       hc.IP,
 			Port:     hc.Port,
 			Status:   hc.Status,
 		}
-		res, err := c.Check(domain)
+		results, err := c.Check(domain)
 		if err != nil {
-			res = &checker.Result{
+			results = []*checker.Result{{
 				Checker: c.Name(),
 				Domain:  domain,
 				Passed:  false,
 				Details: fmt.Sprintf("error: %v", err),
-			}
+			}}
 		}
-		rr.Results = append(rr.Results, res)
+		rr.Results = append(rr.Results, results...)
 	}
 
 	return rr
+}
+
+func getAltSvcFromHTTP2(domain string, resolver string) string {
+	// Quick HTTP/2 request to get Alt-Svc header
+	c := &httpchecker.HTTPChecker{
+		Protocol: "http2",
+		Port:     443,
+		Status:   []int{200, 301, 302},
+	}
+	results, _ := c.Check(domain)
+	for _, r := range results {
+		if r.AltSvc != "" {
+			return r.AltSvc
+		}
+	}
+	return ""
 }

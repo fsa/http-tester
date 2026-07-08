@@ -32,7 +32,7 @@ func (c *DNSChecker) Name() string {
 	return "dns"
 }
 
-func (c *DNSChecker) Check(domain string) (*checker.Result, error) {
+func (c *DNSChecker) Check(domain string) ([]*checker.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -46,7 +46,7 @@ func (c *DNSChecker) Check(domain string) (*checker.Result, error) {
 	if err != nil {
 		result.Passed = false
 		result.Details = fmt.Sprintf("resolution failed: %v", err)
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
 	var ipv4s, ipv6s []string
@@ -74,12 +74,12 @@ func (c *DNSChecker) Check(domain string) (*checker.Result, error) {
 	if c.CheckA && len(ipv4s) == 0 {
 		result.Passed = false
 		result.Details = "no A records found"
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 	if c.CheckAAAA && len(ipv6s) == 0 {
 		result.Passed = false
 		result.Details = "no AAAA records found"
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
 	parts := []string{}
@@ -94,7 +94,7 @@ func (c *DNSChecker) Check(domain string) (*checker.Result, error) {
 		result.Details += ": " + joinParts(parts)
 	}
 
-	return result, nil
+	return []*checker.Result{result}, nil
 }
 
 func joinParts(parts []string) string {

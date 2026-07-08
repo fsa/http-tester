@@ -27,7 +27,7 @@ func (c *HTTPSChecker) Name() string {
 	return "dns-https"
 }
 
-func (c *HTTPSChecker) Check(domain string) (*checker.Result, error) {
+func (c *HTTPSChecker) Check(domain string) ([]*checker.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -46,13 +46,12 @@ func (c *HTTPSChecker) Check(domain string) (*checker.Result, error) {
 	if err != nil {
 		result.Passed = false
 		result.Details = fmt.Sprintf("HTTPS lookup failed: %v", err)
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
 	if resp.Rcode != mdns.RcodeSuccess {
-		// No HTTPS records is not a failure — just report it
 		result.Details = "no HTTPS records"
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
 	for _, rr := range resp.Answer {
@@ -67,11 +66,11 @@ func (c *HTTPSChecker) Check(domain string) (*checker.Result, error) {
 
 	if len(result.Records) == 0 {
 		result.Details = "no HTTPS records in response"
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
 	result.Details = fmt.Sprintf("found %d HTTPS record(s)", len(result.Records))
-	return result, nil
+	return []*checker.Result{result}, nil
 }
 
 func formatSVCB(priority uint16, target string, params []mdns.SVCBKeyValue) string {
@@ -86,7 +85,7 @@ func formatSVCB(priority uint16, target string, params []mdns.SVCBKeyValue) stri
 }
 
 // ConsistencyCheck verifies that HTTPS records point to targets resolvable via A/AAAA.
-func ConsistencyCheck(domain string, server string) (*checker.Result, error) {
+func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 	if server == "" {
 		server = "8.8.8.8:53"
 	}
@@ -100,20 +99,18 @@ func ConsistencyCheck(domain string, server string) (*checker.Result, error) {
 		Passed:  true,
 	}
 
-	// 1. Resolve A/AAAA for domain
 	a4s, a6s, err := resolveIPs(ctx, domain, server)
 	if err != nil {
 		result.Passed = false
 		result.Details = fmt.Sprintf("base resolution failed: %v", err)
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 	if len(a4s) == 0 && len(a6s) == 0 {
 		result.Passed = false
 		result.Details = "no A/AAAA records for domain"
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
-	// 2. Get HTTPS records
 	m := new(mdns.Msg)
 	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
 	m.RecursionDesired = true
@@ -122,12 +119,12 @@ func ConsistencyCheck(domain string, server string) (*checker.Result, error) {
 	if err != nil {
 		result.Passed = false
 		result.Details = fmt.Sprintf("HTTPS lookup failed: %v", err)
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
 	if resp.Rcode != mdns.RcodeSuccess {
 		result.Details = "no HTTPS records, consistency check skipped"
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
 	var httpsRecords []*mdns.HTTPS
@@ -139,17 +136,15 @@ func ConsistencyCheck(domain string, server string) (*checker.Result, error) {
 
 	if len(httpsRecords) == 0 {
 		result.Details = "no HTTPS records, consistency check skipped"
-		return result, nil
+		return []*checker.Result{result}, nil
 	}
 
-	// 3. Check each HTTPS record's target
 	inconsistencies := []string{}
 	for _, h := range httpsRecords {
 		target := h.Target
 		if target == "." || target == "" {
-			continue // alias mode — points to the query name itself
+			continue
 		}
-		// Target is a service binding — resolve it
 		t4s, t6s, err := resolveIPs(ctx, target, server)
 		if err != nil {
 			inconsistencies = append(inconsistencies,
@@ -161,7 +156,6 @@ func ConsistencyCheck(domain string, server string) (*checker.Result, error) {
 				fmt.Sprintf("HTTPS target %s has no A/AAAA records", target))
 			continue
 		}
-		// Check overlap
 		overlap := hasOverlap(a4s, t4s) || hasOverlap(a6s, t6s) || hasOverlap(a4s, t6s) || hasOverlap(a6s, t4s)
 		if !overlap {
 			inconsistencies = append(inconsistencies,
@@ -177,7 +171,7 @@ func ConsistencyCheck(domain string, server string) (*checker.Result, error) {
 		result.Details = fmt.Sprintf("consistent: %d HTTPS record(s) match A/AAAA", len(httpsRecords))
 	}
 
-	return result, nil
+	return []*checker.Result{result}, nil
 }
 
 func resolveIPs(ctx context.Context, domain, server string) (ipv4s, ipv6s []string, err error) {
@@ -212,6 +206,37 @@ func hasOverlap(a, b []string) bool {
 	}
 	for _, s := range b {
 		if set[s] {
+			return true
+		}
+	}
+	return false
+}
+
+// HasHTTPSRecord checks if domain has HTTPS DNS record.
+func HasHTTPSRecord(domain string, server string) bool {
+	if server == "" {
+		server = "8.8.8.8:53"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	m := new(mdns.Msg)
+	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
+	m.RecursionDesired = true
+
+	client := new(mdns.Client)
+	resp, _, err := client.ExchangeContext(ctx, m, server)
+	if err != nil {
+		return false
+	}
+
+	if resp.Rcode != mdns.RcodeSuccess {
+		return false
+	}
+
+	for _, rr := range resp.Answer {
+		if _, ok := rr.(*mdns.HTTPS); ok {
 			return true
 		}
 	}

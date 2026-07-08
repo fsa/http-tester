@@ -7,16 +7,18 @@ type Record struct {
 }
 
 type Result struct {
-	Checker string
-	Domain  string
-	Passed  bool
-	Details string
-	Records []Record
+	Checker     string
+	Domain      string
+	Passed      bool
+	Details     string
+	Records     []Record
+	HTTPVersion string
+	AltSvc      string
 }
 
 type Checker interface {
 	Name() string
-	Check(domain string) (*Result, error)
+	Check(domain string) ([]*Result, error)
 }
 
 type RunResult struct {

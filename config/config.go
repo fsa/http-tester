@@ -14,10 +14,9 @@ type DNSChecks struct {
 }
 
 type HTTPCheck struct {
-	Protocol string   `yaml:"protocol"` // http1, http2, http3
-	IP       string   `yaml:"ip"`       // ipv4, ipv6
-	Port     int      `yaml:"port"`     // 80, 443 (default 443)
-	Status   []int    `yaml:"status"`   // expected status codes, e.g. [200] or [301, 302]
+	Protocol string `yaml:"protocol"` // http1, http2, http3
+	Port     int    `yaml:"port"`     // 80, 443 (default 443)
+	Status   []int  `yaml:"status"`   // expected status codes, e.g. [200] or [301, 302]
 }
 
 type AliasConfig struct {
