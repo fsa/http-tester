@@ -30,8 +30,14 @@ type Checks struct {
 }
 
 type DomainConfig struct {
+	Name    string        `yaml:"name"`
+	Checks  Checks        `yaml:"checks"`
+	Aliases []AliasConfig `yaml:"aliases,omitempty"`
+}
+
+type AliasConfig struct {
 	Name   string  `yaml:"name"`
-	Checks Checks  `yaml:"checks"`
+	Checks Checks  `yaml:"checks,omitempty"`
 }
 
 type TestsConfig struct {
