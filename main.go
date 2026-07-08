@@ -84,6 +84,8 @@ func main() {
 				c := &httpchecker.HTTPChecker{
 					Protocol: hc.Protocol,
 					IP:       hc.IP,
+					Port:     hc.Port,
+					Status:   hc.Status,
 				}
 				res, err := c.Check(d.Name)
 				if err != nil {
