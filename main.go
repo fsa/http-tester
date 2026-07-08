@@ -53,13 +53,15 @@ func main() {
 func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.HTTPCheck, resolver string) checker.RunResult {
 	rr := checker.RunResult{Domain: domain}
 
+	var dnsResult *dns.DNSResult
+
 	// Run DNS checks
 	if dnsChecks != nil {
-		if dnsChecks.A || dnsChecks.AAAA {
+		if dnsChecks.A != "" || dnsChecks.AAAA != "" {
 			c := dns.New(resolver)
-			c.CheckA = dnsChecks.A
-			c.CheckAAAA = dnsChecks.AAAA
-			results, err := c.Check(domain)
+			c.A = dnsChecks.A
+			c.AAAA = dnsChecks.AAAA
+			results, result, err := c.Check(domain)
 			if err != nil {
 				results = []*checker.Result{{
 					Checker: c.Name(),
@@ -67,11 +69,14 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.H
 					Passed:  false,
 					Details: fmt.Sprintf("error: %v", err),
 				}}
+			} else {
+				dnsResult = result
 			}
 			rr.Results = append(rr.Results, results...)
 		}
 
-		if dnsChecks.HTTPS {
+		// HTTPS record check
+		if dnsChecks.HTTPS != "" {
 			c := dns.NewHTTPSChecker(resolver)
 			results, err := c.Check(domain)
 			if err != nil {
@@ -81,29 +86,45 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.H
 					Passed:  false,
 					Details: fmt.Sprintf("error: %v", err),
 				}}
+			} else {
+				// Handle "yes" and "no" cases
+				if dnsChecks.HTTPS == config.DNSNo {
+					// Expect NO HTTPS records
+					for _, r := range results {
+						if r.Passed && len(r.Records) > 0 {
+							// Records found but not expected
+							r.Passed = false
+							r.Details = fmt.Sprintf("HTTPS records found but not expected: %d record(s)", len(r.Records))
+						} else if !r.Passed && len(r.Records) == 0 {
+							// No records found - that's expected for "no"
+							r.Passed = true
+							r.Details = "no HTTPS records (expected)"
+						}
+					}
+				} else {
+					// Expect HTTPS records ("yes")
+					httpsPassed := false
+					for _, r := range results {
+						if r.Passed {
+							httpsPassed = true
+							break
+						}
+					}
+					if httpsPassed {
+						consResults, err := dns.ConsistencyCheck(domain, resolver)
+						if err != nil {
+							consResults = []*checker.Result{{
+								Checker: "dns-consistency",
+								Domain:  domain,
+								Passed:  false,
+								Details: fmt.Sprintf("error: %v", err),
+							}}
+						}
+						results = append(results, consResults...)
+					}
+				}
 			}
 			rr.Results = append(rr.Results, results...)
-
-			// Run consistency check automatically if HTTPS check passed
-			httpsPassed := false
-			for _, r := range results {
-				if r.Passed {
-					httpsPassed = true
-					break
-				}
-			}
-			if httpsPassed {
-				results, err := dns.ConsistencyCheck(domain, resolver)
-				if err != nil {
-					results = []*checker.Result{{
-						Checker: "dns-consistency",
-						Domain:  domain,
-						Passed:  false,
-						Details: fmt.Sprintf("error: %v", err),
-					}}
-				}
-				rr.Results = append(rr.Results, results...)
-			}
 		}
 	}
 
@@ -159,6 +180,25 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.H
 				Details: fmt.Sprintf("error: %v", err),
 			}}
 		}
+
+		// Filter results based on DNS availability
+		if dnsResult != nil {
+			var filtered []*checker.Result
+			for _, r := range results {
+				// Check if this result is for a specific IP version
+				if strings.Contains(r.Checker, "ipv4") && !dnsResult.HasA {
+					// Skip IPv4 checks if no A record (or "no" was set)
+					continue
+				}
+				if strings.Contains(r.Checker, "ipv6") && !dnsResult.HasAAAA {
+					// Skip IPv6 checks if no AAAA record (or "no" was set)
+					continue
+				}
+				filtered = append(filtered, r)
+			}
+			results = filtered
+		}
+
 		rr.Results = append(rr.Results, results...)
 	}
 
@@ -166,7 +206,6 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.H
 }
 
 func getAltSvcFromHTTP2(domain string, resolver string) string {
-	// Quick HTTP/2 request to get Alt-Svc header
 	c := &httpchecker.HTTPChecker{
 		Protocol: "http2",
 		Port:     443,

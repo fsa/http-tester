@@ -1,8 +1,8 @@
 name: example.com
 dns:
-  a: true
-  aaaa: true
-  https: true
+  a: yes
+  aaaa: yes
+  https: yes
 http:
   - protocol: http1
     port: 80
@@ -19,9 +19,9 @@ http:
 aliases:
   - name: www.example.com
     dns:
-      a: true
-      aaaa: true
-      https: true
+      a: yes
+      aaaa: yes
+      https: no
     http:
       - protocol: http1
         port: 80

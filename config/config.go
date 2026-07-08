@@ -6,10 +6,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type DNSRecordCheck string
+
+const (
+	DNSYes  DNSRecordCheck = "yes"
+	DNSNo   DNSRecordCheck = "no"
+	DNSNone DNSRecordCheck = ""
+)
+
 type DNSChecks struct {
-	A     bool `yaml:"a"`
-	AAAA  bool `yaml:"aaaa"`
-	HTTPS bool `yaml:"https"`
+	A     DNSRecordCheck `yaml:"a"`
+	AAAA  DNSRecordCheck `yaml:"aaaa"`
+	HTTPS DNSRecordCheck `yaml:"https"`
 }
 
 type HTTPCheck struct {
