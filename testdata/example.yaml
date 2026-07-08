@@ -2,7 +2,7 @@ name: example.com
 dns:
   a: yes
   aaaa: yes
-  https: yes
+  https: maybe
 http: true
 aliases:
   - name: www.example.com

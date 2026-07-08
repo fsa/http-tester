@@ -86,22 +86,43 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, enableHTTP bool, reso
 					Details: fmt.Sprintf("error: %v", err),
 				}}
 			} else {
-				// Handle "yes" and "no" cases
 				if dnsChecks.HTTPS == config.DNSNo {
 					// Expect NO HTTPS records
 					for _, r := range results {
 						if r.Passed && len(r.Records) > 0 {
-							// Records found but not expected
 							r.Passed = false
 							r.Details = fmt.Sprintf("HTTPS records found but not expected: %d record(s)", len(r.Records))
 						} else if !r.Passed && len(r.Records) == 0 {
-							// No records found - that's expected for "no"
 							r.Passed = true
 							r.Details = "no HTTPS records (expected)"
 						}
 					}
+				} else if dnsChecks.HTTPS == config.DNSMaybe {
+					// Optional - check if records exist, run consistency if they do
+					httpsFound := false
+					for _, r := range results {
+						if r.Passed && len(r.Records) > 0 {
+							httpsFound = true
+							r.Details = fmt.Sprintf("found %d HTTPS record(s) (optional)", len(r.Records))
+						} else if !r.Passed {
+							r.Passed = true
+							r.Details = "no HTTPS records (optional)"
+						}
+					}
+					if httpsFound {
+						consResults, err := dns.ConsistencyCheck(domain, resolver)
+						if err != nil {
+							consResults = []*checker.Result{{
+								Checker: "dns-consistency",
+								Domain:  domain,
+								Passed:  false,
+								Details: fmt.Sprintf("error: %v", err),
+							}}
+						}
+						results = append(results, consResults...)
+					}
 				} else {
-					// Expect HTTPS records ("yes")
+					// "yes" - expect HTTPS records
 					httpsPassed := false
 					for _, r := range results {
 						if r.Passed {

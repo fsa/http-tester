@@ -9,9 +9,10 @@ import (
 type DNSRecordCheck string
 
 const (
-	DNSYes  DNSRecordCheck = "yes"
-	DNSNo   DNSRecordCheck = "no"
-	DNSNone DNSRecordCheck = ""
+	DNSYes   DNSRecordCheck = "yes"
+	DNSNo    DNSRecordCheck = "no"
+	DNSMaybe DNSRecordCheck = "maybe"
+	DNSNone  DNSRecordCheck = ""
 )
 
 type DNSChecks struct {
