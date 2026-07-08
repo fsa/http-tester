@@ -35,6 +35,7 @@ type JSONResult struct {
 	Records     []JSONRecord   `json:"records,omitempty"`
 	HTTPVersion string         `json:"http_version,omitempty"`
 	AltSvc      string         `json:"alt_svc,omitempty"`
+	RedirectTo  string         `json:"redirect_to,omitempty"`
 }
 
 type JSONRecord struct {
@@ -80,6 +81,9 @@ func printText(results []checker.RunResult) int {
 				}
 			}
 			fmt.Fprintf(os.Stdout, "  [%s] %s: %s\n", status, res.Checker, res.Details)
+			if res.RedirectTo != "" {
+				fmt.Fprintf(os.Stdout, "         -> %s\n", res.RedirectTo)
+			}
 			for _, rec := range res.Records {
 				fmt.Fprintf(os.Stdout, "         %s %s\n", rec.Type, rec.Value)
 			}
@@ -127,6 +131,7 @@ func printJSON(results []checker.RunResult) int {
 				Details:     res.Details,
 				HTTPVersion: res.HTTPVersion,
 				AltSvc:      res.AltSvc,
+				RedirectTo:  res.RedirectTo,
 			}
 			for _, rec := range res.Records {
 				jr.Records = append(jr.Records, JSONRecord{
@@ -167,6 +172,9 @@ func FormatText(results []checker.RunResult) string {
 				status = "FAIL"
 			}
 			b.WriteString(fmt.Sprintf("  [%s] %s: %s\n", status, res.Checker, res.Details))
+			if res.RedirectTo != "" {
+				b.WriteString(fmt.Sprintf("         -> %s\n", res.RedirectTo))
+			}
 			for _, rec := range res.Records {
 				b.WriteString(fmt.Sprintf("         %s %s\n", rec.Type, rec.Value))
 			}

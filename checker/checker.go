@@ -15,6 +15,7 @@ type Result struct {
 	Records     []Record
 	HTTPVersion string
 	AltSvc      string
+	RedirectTo  string
 }
 
 type Checker interface {
