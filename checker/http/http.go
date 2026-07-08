@@ -136,7 +136,7 @@ func checkHTTPRedirect(domain, protocol, ipVer, ip string, port int) *checker.Re
 	defer resp.Body.Close()
 
 	result.Passed = resp.StatusCode == 301 || resp.StatusCode == 302
-	result.Details = fmt.Sprintf("%s %s -> %d %s", result.Checker, u.String(), resp.StatusCode, resp.Status)
+	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
 	result.HTTPVersion = resp.Proto
 	if loc := resp.Header.Get("Location"); loc != "" {
 		result.RedirectTo = loc
@@ -194,7 +194,7 @@ func checkHTTPSH2(domain, ipVer, ip string) *checker.Result {
 	defer resp.Body.Close()
 
 	result.Passed = resp.StatusCode >= 200 && resp.StatusCode < 400
-	result.Details = fmt.Sprintf("%s %s -> %d %s", result.Checker, u.String(), resp.StatusCode, resp.Status)
+	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
 	result.HTTPVersion = resp.Proto
 	result.AltSvc = resp.Header.Get("Alt-Svc")
 	if loc := resp.Header.Get("Location"); loc != "" {
@@ -254,7 +254,7 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 	defer resp.Body.Close()
 
 	result.Passed = resp.StatusCode >= 200 && resp.StatusCode < 400
-	result.Details = fmt.Sprintf("%s %s -> %d %s", result.Checker, u.String(), resp.StatusCode, resp.Status)
+	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
 	result.HTTPVersion = resp.Proto
 	return result
 }
