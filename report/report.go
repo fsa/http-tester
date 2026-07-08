@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -15,7 +16,46 @@ const (
 	colorCyan  = "\033[36m"
 )
 
-func Print(results []checker.RunResult) int {
+type JSONReport struct {
+	Domains []JSONDomain `json:"domains"`
+	Summary JSONSummary  `json:"summary"`
+}
+
+type JSONDomain struct {
+	Name    string         `json:"name"`
+	Results []JSONResult   `json:"results"`
+}
+
+type JSONResult struct {
+	Checker     string         `json:"checker"`
+	Passed      bool           `json:"passed"`
+	Details     string         `json:"details"`
+	Records     []JSONRecord   `json:"records,omitempty"`
+	HTTPVersion string         `json:"http_version,omitempty"`
+	AltSvc      string         `json:"alt_svc,omitempty"`
+}
+
+type JSONRecord struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
+type JSONSummary struct {
+	Total  int `json:"total"`
+	Passed int `json:"passed"`
+	Failed int `json:"failed"`
+}
+
+func Print(results []checker.RunResult, format string) int {
+	switch format {
+	case "json":
+		return printJSON(results)
+	default:
+		return printText(results)
+	}
+}
+
+func printText(results []checker.RunResult) int {
 	total := 0
 	passed := 0
 
@@ -43,6 +83,51 @@ func Print(results []checker.RunResult) int {
 		failed := total - passed
 		fmt.Fprintf(os.Stdout, "%s%d passed%s, %s%d failed%s\n", colorGreen, passed, colorReset, colorRed, failed, colorReset)
 	}
+
+	if passed < total {
+		return 1
+	}
+	return 0
+}
+
+func printJSON(results []checker.RunResult) int {
+	report := JSONReport{}
+	total := 0
+	passed := 0
+
+	for _, r := range results {
+		domain := JSONDomain{Name: r.Domain}
+		for _, res := range r.Results {
+			total++
+			if res.Passed {
+				passed++
+			}
+			jr := JSONResult{
+				Checker:     res.Checker,
+				Passed:      res.Passed,
+				Details:     res.Details,
+				HTTPVersion: res.HTTPVersion,
+				AltSvc:      res.AltSvc,
+			}
+			for _, rec := range res.Records {
+				jr.Records = append(jr.Records, JSONRecord{
+					Type:  rec.Type,
+					Value: rec.Value,
+				})
+			}
+			domain.Results = append(domain.Results, jr)
+		}
+		report.Domains = append(report.Domains, domain)
+	}
+
+	report.Summary = JSONSummary{
+		Total:  total,
+		Passed: passed,
+		Failed: total - passed,
+	}
+
+	data, _ := json.MarshalIndent(report, "", "  ")
+	fmt.Fprintln(os.Stdout, string(data))
 
 	if passed < total {
 		return 1

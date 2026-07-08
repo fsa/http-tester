@@ -15,6 +15,7 @@ import (
 
 func main() {
 	resolver := flag.String("resolver", "", "DNS resolver address (e.g. 8.8.8.8:53)")
+	format := flag.String("format", "text", "output format: text, json")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] <config.yaml>\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -45,7 +46,7 @@ func main() {
 		allResults = append(allResults, arr)
 	}
 
-	exitCode := report.Print(allResults)
+	exitCode := report.Print(allResults, *format)
 	os.Exit(exitCode)
 }
 
