@@ -92,16 +92,16 @@ aliases:
 ## Пример вывода
 
 ```
-=== tavda.info ===
-  [PASS] dns: tavda.info resolved: A: [87.120.92.93], AAAA: [...]
+=== example.com ===
+  [PASS] dns: example.com resolved: A: [192.0.2.1], AAAA: [2001:db8::1]
   [PASS] dns-https: found 1 HTTPS record(s)
   [PASS] dns-consistency: consistent
-  [PASS] http-http1-ipv4: http://tavda.info/ -> 302 Moved Temporarily
-  [PASS] http-http1-ipv6: http://tavda.info/ -> 302 Moved Temporarily
-  [PASS] https-http2-ipv4: https://tavda.info/ -> 200 OK
-  [PASS] https-http2-ipv6: https://tavda.info/ -> 200 OK
-  [PASS] https-http3-ipv4: https://tavda.info/ -> 200 OK
-  [PASS] https-http3-ipv6: https://tavda.info/ -> 200 OK
+  [PASS] http-http1-ipv4: http://example.com/ -> 302 Moved Temporarily
+  [PASS] http-http1-ipv6: http://example.com/ -> 302 Moved Temporarily
+  [PASS] https-http2-ipv4: https://example.com/ -> 200 OK
+  [PASS] https-http2-ipv6: https://example.com/ -> 200 OK
+  [PASS] https-http3-ipv4: https://example.com/ -> 200 OK
+  [PASS] https-http3-ipv6: https://example.com/ -> 200 OK
 
 --- Summary ---
 All 9 check(s) passed
