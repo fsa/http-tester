@@ -1,0 +1,8 @@
+domains:
+  - name: example.com
+    checks:
+      dns:
+        a: true
+        aaaa: true
+        https: true
+        consistency: true
