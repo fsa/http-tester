@@ -1,69 +1,63 @@
 name: example.com
-checks:
-  dns:
-    a: true
-    aaaa: true
-    https: true
-    consistency: true
-  http:
-    checks:
-      # HTTP on port 80 - expect redirect to HTTPS
-      - protocol: http1
-        ip: ipv4
-        port: 80
-        status: [301, 302]
-      - protocol: http1
-        ip: ipv6
-        port: 80
-        status: [301, 302]
-      # HTTPS on port 443
-      - protocol: http1
-        ip: ipv4
-        port: 443
-        status: [200]
-      - protocol: http1
-        ip: ipv6
-        port: 443
-        status: [200]
-      - protocol: http2
-        ip: ipv4
-        port: 443
-        status: [200]
-      - protocol: http2
-        ip: ipv6
-        port: 443
-        status: [200]
-      - protocol: http3
-        ip: ipv4
-        port: 443
-        status: [200]
-      - protocol: http3
-        ip: ipv6
-        port: 443
-        status: [200]
+dns:
+  a: true
+  aaaa: true
+  https: true
+  consistency: true
+http:
+  - protocol: http1
+    ip: ipv4
+    port: 80
+    status: [301, 302]
+  - protocol: http1
+    ip: ipv6
+    port: 80
+    status: [301, 302]
+  - protocol: http1
+    ip: ipv4
+    port: 443
+    status: [200]
+  - protocol: http1
+    ip: ipv6
+    port: 443
+    status: [200]
+  - protocol: http2
+    ip: ipv4
+    port: 443
+    status: [200]
+  - protocol: http2
+    ip: ipv6
+    port: 443
+    status: [200]
+  - protocol: http3
+    ip: ipv4
+    port: 443
+    status: [200]
+  - protocol: http3
+    ip: ipv6
+    port: 443
+    status: [200]
 aliases:
   - name: www.example.com
-    checks:
-      dns:
-        a: true
-        aaaa: true
-        https: true
-        consistency: true
-      http:
-        checks:
-          - protocol: http1
-            ip: ipv4
-            port: 80
-            status: [301, 302]
-          - protocol: http1
-            ip: ipv6
-            port: 80
-            status: [301, 302]
-          - protocol: http1
-            ip: ipv4
-            port: 443
-            status: [301, 302]
-          - protocol: http1
-            ip: ipv6
-            port: 443
-            status: [301, 302]
+    dns:
+      a: true
+      aaaa: true
+      https: true
+      consistency: true
+    http:
+      - protocol: http1
+        ip: ipv4
+        port: 80
+        status: [301, 302]
+      - protocol: http1
+        ip: ipv6
+        port: 80
+        status: [301, 302]
+      - protocol: http1
+        ip: ipv4
+        port: 443
+        status: [301, 302]
+      - protocol: http1
+        ip: ipv6
+        port: 443
+        status: [301, 302]

@@ -20,23 +20,16 @@ type HTTPCheck struct {
 	Status   []int    `yaml:"status"`   // expected status codes, e.g. [200] or [301, 302]
 }
 
-type HTTPChecks struct {
-	Checks []HTTPCheck `yaml:"checks"`
-}
-
-type Checks struct {
-	DNS  *DNSChecks  `yaml:"dns"`
-	HTTP *HTTPChecks `yaml:"http"`
-}
-
 type AliasConfig struct {
-	Name   string  `yaml:"name"`
-	Checks Checks  `yaml:"checks,omitempty"`
+	Name string      `yaml:"name"`
+	DNS  *DNSChecks  `yaml:"dns,omitempty"`
+	HTTP []HTTPCheck `yaml:"http,omitempty"`
 }
 
 type DomainConfig struct {
 	Name    string        `yaml:"name"`
-	Checks  Checks        `yaml:"checks"`
+	DNS     *DNSChecks    `yaml:"dns,omitempty"`
+	HTTP    []HTTPCheck   `yaml:"http,omitempty"`
 	Aliases []AliasConfig `yaml:"aliases,omitempty"`
 }
 

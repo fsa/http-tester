@@ -36,11 +36,11 @@ func main() {
 
 	var allResults []checker.RunResult
 
-	rr := runDomain(cfg.Name, cfg.Checks, *resolver)
+	rr := runDomain(cfg.Name, cfg.DNS, cfg.HTTP, *resolver)
 	allResults = append(allResults, rr)
 
 	for _, alias := range cfg.Aliases {
-		arr := runDomain(alias.Name, alias.Checks, *resolver)
+		arr := runDomain(alias.Name, alias.DNS, alias.HTTP, *resolver)
 		allResults = append(allResults, arr)
 	}
 
@@ -48,14 +48,14 @@ func main() {
 	os.Exit(exitCode)
 }
 
-func runDomain(domain string, checks config.Checks, resolver string) checker.RunResult {
+func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.HTTPCheck, resolver string) checker.RunResult {
 	rr := checker.RunResult{Domain: domain}
 
-	if checks.DNS != nil {
-		if checks.DNS.A || checks.DNS.AAAA {
+	if dnsChecks != nil {
+		if dnsChecks.A || dnsChecks.AAAA {
 			c := dns.New(resolver)
-			c.CheckA = checks.DNS.A
-			c.CheckAAAA = checks.DNS.AAAA
+			c.CheckA = dnsChecks.A
+			c.CheckAAAA = dnsChecks.AAAA
 			res, err := c.Check(domain)
 			if err != nil {
 				res = &checker.Result{
@@ -68,7 +68,7 @@ func runDomain(domain string, checks config.Checks, resolver string) checker.Run
 			rr.Results = append(rr.Results, res)
 		}
 
-		if checks.DNS.HTTPS {
+		if dnsChecks.HTTPS {
 			c := dns.NewHTTPSChecker(resolver)
 			res, err := c.Check(domain)
 			if err != nil {
@@ -82,7 +82,7 @@ func runDomain(domain string, checks config.Checks, resolver string) checker.Run
 			rr.Results = append(rr.Results, res)
 		}
 
-		if checks.DNS.Consistency {
+		if dnsChecks.Consistency {
 			res, err := dns.ConsistencyCheck(domain, resolver)
 			if err != nil {
 				res = &checker.Result{
@@ -96,25 +96,23 @@ func runDomain(domain string, checks config.Checks, resolver string) checker.Run
 		}
 	}
 
-	if checks.HTTP != nil {
-		for _, hc := range checks.HTTP.Checks {
-			c := &httpchecker.HTTPChecker{
-				Protocol: hc.Protocol,
-				IP:       hc.IP,
-				Port:     hc.Port,
-				Status:   hc.Status,
-			}
-			res, err := c.Check(domain)
-			if err != nil {
-				res = &checker.Result{
-					Checker: c.Name(),
-					Domain:  domain,
-					Passed:  false,
-					Details: fmt.Sprintf("error: %v", err),
-				}
-			}
-			rr.Results = append(rr.Results, res)
+	for _, hc := range httpChecks {
+		c := &httpchecker.HTTPChecker{
+			Protocol: hc.Protocol,
+			IP:       hc.IP,
+			Port:     hc.Port,
+			Status:   hc.Status,
 		}
+		res, err := c.Check(domain)
+		if err != nil {
+			res = &checker.Result{
+				Checker: c.Name(),
+				Domain:  domain,
+				Passed:  false,
+				Details: fmt.Sprintf("error: %v", err),
+			}
+		}
+		rr.Results = append(rr.Results, res)
 	}
 
 	return rr
