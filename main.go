@@ -83,19 +83,27 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.H
 				}}
 			}
 			rr.Results = append(rr.Results, results...)
-		}
 
-		if dnsChecks.Consistency {
-			results, err := dns.ConsistencyCheck(domain, resolver)
-			if err != nil {
-				results = []*checker.Result{{
-					Checker: "dns-consistency",
-					Domain:  domain,
-					Passed:  false,
-					Details: fmt.Sprintf("error: %v", err),
-				}}
+			// Run consistency check automatically if HTTPS check passed
+			httpsPassed := false
+			for _, r := range results {
+				if r.Passed {
+					httpsPassed = true
+					break
+				}
 			}
-			rr.Results = append(rr.Results, results...)
+			if httpsPassed {
+				results, err := dns.ConsistencyCheck(domain, resolver)
+				if err != nil {
+					results = []*checker.Result{{
+						Checker: "dns-consistency",
+						Domain:  domain,
+						Passed:  false,
+						Details: fmt.Sprintf("error: %v", err),
+					}}
+				}
+				rr.Results = append(rr.Results, results...)
+			}
 		}
 	}
 

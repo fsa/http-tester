@@ -7,10 +7,9 @@ import (
 )
 
 type DNSChecks struct {
-	A           bool `yaml:"a"`
-	AAAA        bool `yaml:"aaaa"`
-	HTTPS       bool `yaml:"https"`
-	Consistency bool `yaml:"consistency"`
+	A     bool `yaml:"a"`
+	AAAA  bool `yaml:"aaaa"`
+	HTTPS bool `yaml:"https"`
 }
 
 type HTTPCheck struct {

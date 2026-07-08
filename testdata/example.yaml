@@ -3,7 +3,6 @@ dns:
   a: true
   aaaa: true
   https: true
-  consistency: true
 http:
   - protocol: http1
     port: 80
@@ -23,7 +22,6 @@ aliases:
       a: true
       aaaa: true
       https: true
-      consistency: true
     http:
       - protocol: http1
         port: 80
