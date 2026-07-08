@@ -7,6 +7,7 @@ import (
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
+	httpchecker "http-tester/checker/http"
 	"http-tester/config"
 	"http-tester/report"
 )
@@ -69,6 +70,25 @@ func main() {
 				if err != nil {
 					res = &checker.Result{
 						Checker: "dns-consistency",
+						Domain:  d.Name,
+						Passed:  false,
+						Details: fmt.Sprintf("error: %v", err),
+					}
+				}
+				rr.Results = append(rr.Results, res)
+			}
+		}
+
+		if d.Checks.HTTP != nil {
+			for _, hc := range d.Checks.HTTP.Checks {
+				c := &httpchecker.HTTPChecker{
+					Protocol: hc.Protocol,
+					IP:       hc.IP,
+				}
+				res, err := c.Check(d.Name)
+				if err != nil {
+					res = &checker.Result{
+						Checker: c.Name(),
 						Domain:  d.Name,
 						Passed:  false,
 						Details: fmt.Sprintf("error: %v", err),

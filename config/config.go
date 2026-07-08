@@ -13,8 +13,18 @@ type DNSChecks struct {
 	Consistency bool `yaml:"consistency"`
 }
 
+type HTTPCheck struct {
+	Protocol string `yaml:"protocol"` // http1, http2, http3
+	IP       string `yaml:"ip"`       // ipv4, ipv6
+}
+
+type HTTPChecks struct {
+	Checks []HTTPCheck `yaml:"checks"`
+}
+
 type Checks struct {
-	DNS *DNSChecks `yaml:"dns"`
+	DNS  *DNSChecks  `yaml:"dns"`
+	HTTP *HTTPChecks `yaml:"http"`
 }
 
 type DomainConfig struct {

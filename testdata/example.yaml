@@ -6,3 +6,17 @@ domains:
         aaaa: true
         https: true
         consistency: true
+      http:
+        checks:
+          - protocol: http1
+            ip: ipv4
+          - protocol: http1
+            ip: ipv6
+          - protocol: http2
+            ip: ipv4
+          - protocol: http2
+            ip: ipv6
+          - protocol: http3
+            ip: ipv4
+          - protocol: http3
+            ip: ipv6
