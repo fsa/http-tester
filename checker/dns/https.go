@@ -50,6 +50,7 @@ func (c *HTTPSChecker) Check(domain string) ([]*checker.Result, error) {
 	}
 
 	if resp.Rcode != mdns.RcodeSuccess {
+		result.Passed = false
 		result.Details = "no HTTPS records"
 		return []*checker.Result{result}, nil
 	}
@@ -65,6 +66,7 @@ func (c *HTTPSChecker) Check(domain string) ([]*checker.Result, error) {
 	}
 
 	if len(result.Records) == 0 {
+		result.Passed = false
 		result.Details = "no HTTPS records in response"
 		return []*checker.Result{result}, nil
 	}
