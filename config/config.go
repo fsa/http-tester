@@ -29,27 +29,23 @@ type Checks struct {
 	HTTP *HTTPChecks `yaml:"http"`
 }
 
+type AliasConfig struct {
+	Name   string  `yaml:"name"`
+	Checks Checks  `yaml:"checks,omitempty"`
+}
+
 type DomainConfig struct {
 	Name    string        `yaml:"name"`
 	Checks  Checks        `yaml:"checks"`
 	Aliases []AliasConfig `yaml:"aliases,omitempty"`
 }
 
-type AliasConfig struct {
-	Name   string  `yaml:"name"`
-	Checks Checks  `yaml:"checks,omitempty"`
-}
-
-type TestsConfig struct {
-	Domains []DomainConfig `yaml:"domains"`
-}
-
-func LoadTests(path string) (*TestsConfig, error) {
+func LoadDomain(path string) (*DomainConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var cfg TestsConfig
+	var cfg DomainConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}

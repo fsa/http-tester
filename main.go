@@ -13,17 +13,22 @@ import (
 )
 
 func main() {
-	testsFile := flag.String("tests", "", "path to tests YAML config file")
-	resolver := flag.String("resolver", "", "DNS resolver address (e.g. 8.8.8.8:53). If empty, system default is used.")
+	resolver := flag.String("resolver", "", "DNS resolver address (e.g. 8.8.8.8:53)")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] <config.yaml>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
-	if *testsFile == "" {
-		fmt.Fprintln(os.Stderr, "Usage: http-tester -tests <config.yaml> [-resolver <addr>]")
-		flag.PrintDefaults()
+	if flag.NArg() < 1 {
+		flag.Usage()
 		os.Exit(1)
 	}
 
-	cfg, err := config.LoadTests(*testsFile)
+	configFile := flag.Arg(0)
+
+	cfg, err := config.LoadDomain(configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -31,14 +36,12 @@ func main() {
 
 	var allResults []checker.RunResult
 
-	for _, d := range cfg.Domains {
-		rr := runDomain(d.Name, d.Checks, *resolver)
-		allResults = append(allResults, rr)
+	rr := runDomain(cfg.Name, cfg.Checks, *resolver)
+	allResults = append(allResults, rr)
 
-		for _, alias := range d.Aliases {
-			arr := runDomain(alias.Name, alias.Checks, *resolver)
-			allResults = append(allResults, arr)
-		}
+	for _, alias := range cfg.Aliases {
+		arr := runDomain(alias.Name, alias.Checks, *resolver)
+		allResults = append(allResults, arr)
 	}
 
 	exitCode := report.Print(allResults)
