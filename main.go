@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
@@ -50,7 +49,7 @@ func main() {
 	os.Exit(exitCode)
 }
 
-func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.HTTPCheck, resolver string) checker.RunResult {
+func runDomain(domain string, dnsChecks *config.DNSChecks, enableHTTP bool, resolver string) checker.RunResult {
 	rr := checker.RunResult{Domain: domain}
 
 	var dnsResult *dns.DNSResult
@@ -128,70 +127,21 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.H
 		}
 	}
 
-	// Run HTTP checks
-	// First check if HTTP/3 should be tested
-	shouldTestH3 := false
-	for _, hc := range httpChecks {
-		if hc.Protocol == "http3" {
-			shouldTestH3 = true
-			break
-		}
-	}
-
-	if shouldTestH3 {
-		// Check if domain has HTTPS DNS record
-		hasHTTPSRecord := dns.HasHTTPSRecord(domain, resolver)
-
-		// Also check Alt-Svc header from HTTP/2 response
-		altSvc := getAltSvcFromHTTP2(domain, resolver)
-
-		if !hasHTTPSRecord && !strings.Contains(altSvc, "h3") {
-			// Skip HTTP/3 - no support detected
-			for _, hc := range httpChecks {
-				if hc.Protocol == "http3" {
-					rr.Results = append(rr.Results, &checker.Result{
-						Checker: fmt.Sprintf("https-http3"),
-						Domain:  domain,
-						Passed:  false,
-						Details: "skipped: no HTTPS DNS record and no Alt-Svc h3 support",
-					})
-				}
-			}
-		}
-	}
-
-	for _, hc := range httpChecks {
-		// Skip HTTP/3 if no support detected
-		if hc.Protocol == "http3" && !shouldTestH3 {
-			continue
-		}
-
-		c := &httpchecker.HTTPChecker{
-			Protocol: hc.Protocol,
-			Port:     hc.Port,
-			Status:   hc.Status,
-		}
-		results, err := c.Check(domain)
-		if err != nil {
-			results = []*checker.Result{{
-				Checker: c.Name(),
-				Domain:  domain,
-				Passed:  false,
-				Details: fmt.Sprintf("error: %v", err),
-			}}
-		}
+	// Run automatic HTTP checks if enabled
+	if enableHTTP {
+		hasHTTPSCheck := dnsChecks != nil && dnsChecks.HTTPS != ""
+		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck)
 
 		// Filter results based on DNS availability
 		if dnsResult != nil {
 			var filtered []*checker.Result
 			for _, r := range results {
-				// Check if this result is for a specific IP version
-				if strings.Contains(r.Checker, "ipv4") && !dnsResult.HasA {
-					// Skip IPv4 checks if no A record (or "no" was set)
+				// Skip IPv4 checks if no A record
+				if contains(r.Checker, "ipv4") && !dnsResult.HasA {
 					continue
 				}
-				if strings.Contains(r.Checker, "ipv6") && !dnsResult.HasAAAA {
-					// Skip IPv6 checks if no AAAA record (or "no" was set)
+				// Skip IPv6 checks if no AAAA record
+				if contains(r.Checker, "ipv6") && !dnsResult.HasAAAA {
 					continue
 				}
 				filtered = append(filtered, r)
@@ -205,17 +155,15 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, httpChecks []config.H
 	return rr
 }
 
-func getAltSvcFromHTTP2(domain string, resolver string) string {
-	c := &httpchecker.HTTPChecker{
-		Protocol: "http2",
-		Port:     443,
-		Status:   []int{200, 301, 302},
-	}
-	results, _ := c.Check(domain)
-	for _, r := range results {
-		if r.AltSvc != "" {
-			return r.AltSvc
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStr(s, substr))
+}
+
+func containsStr(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
 		}
 	}
-	return ""
+	return false
 }

@@ -10,6 +10,7 @@ type Result struct {
 	Checker     string
 	Domain      string
 	Passed      bool
+	Warning     bool
 	Details     string
 	Records     []Record
 	HTTPVersion string

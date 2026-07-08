@@ -12,6 +12,7 @@ import (
 const (
 	colorGreen = "\033[32m"
 	colorRed   = "\033[31m"
+	colorYellow = "\033[33m"
 	colorReset = "\033[0m"
 	colorCyan  = "\033[36m"
 )
@@ -29,6 +30,7 @@ type JSONDomain struct {
 type JSONResult struct {
 	Checker     string         `json:"checker"`
 	Passed      bool           `json:"passed"`
+	Warning     bool           `json:"warning,omitempty"`
 	Details     string         `json:"details"`
 	Records     []JSONRecord   `json:"records,omitempty"`
 	HTTPVersion string         `json:"http_version,omitempty"`
@@ -41,9 +43,10 @@ type JSONRecord struct {
 }
 
 type JSONSummary struct {
-	Total  int `json:"total"`
-	Passed int `json:"passed"`
-	Failed int `json:"failed"`
+	Total    int `json:"total"`
+	Passed   int `json:"passed"`
+	Failed   int `json:"failed"`
+	Warnings int `json:"warnings"`
 }
 
 func Print(results []checker.RunResult, format string) int {
@@ -58,16 +61,23 @@ func Print(results []checker.RunResult, format string) int {
 func printText(results []checker.RunResult) int {
 	total := 0
 	passed := 0
+	warnings := 0
 
 	for _, r := range results {
 		fmt.Fprintf(os.Stdout, "\n%s=== %s ===%s\n", colorCyan, r.Domain, colorReset)
 		for _, res := range r.Results {
-			total++
-			status := colorGreen + "PASS" + colorReset
-			if !res.Passed {
-				status = colorRed + "FAIL" + colorReset
+			var status string
+			if res.Warning {
+				status = colorYellow + "WARN" + colorReset
+				warnings++
 			} else {
-				passed++
+				total++
+				if res.Passed {
+					status = colorGreen + "PASS" + colorReset
+					passed++
+				} else {
+					status = colorRed + "FAIL" + colorReset
+				}
 			}
 			fmt.Fprintf(os.Stdout, "  [%s] %s: %s\n", status, res.Checker, res.Details)
 			for _, rec := range res.Records {
@@ -83,6 +93,9 @@ func printText(results []checker.RunResult) int {
 		failed := total - passed
 		fmt.Fprintf(os.Stdout, "%s%d passed%s, %s%d failed%s\n", colorGreen, passed, colorReset, colorRed, failed, colorReset)
 	}
+	if warnings > 0 {
+		fmt.Fprintf(os.Stdout, "%s%d warning(s)%s\n", colorYellow, warnings, colorReset)
+	}
 
 	if passed < total {
 		return 1
@@ -94,17 +107,23 @@ func printJSON(results []checker.RunResult) int {
 	report := JSONReport{}
 	total := 0
 	passed := 0
+	warnings := 0
 
 	for _, r := range results {
 		domain := JSONDomain{Name: r.Domain}
 		for _, res := range r.Results {
-			total++
-			if res.Passed {
-				passed++
+			if res.Warning {
+				warnings++
+			} else {
+				total++
+				if res.Passed {
+					passed++
+				}
 			}
 			jr := JSONResult{
 				Checker:     res.Checker,
 				Passed:      res.Passed,
+				Warning:     res.Warning,
 				Details:     res.Details,
 				HTTPVersion: res.HTTPVersion,
 				AltSvc:      res.AltSvc,
@@ -121,9 +140,10 @@ func printJSON(results []checker.RunResult) int {
 	}
 
 	report.Summary = JSONSummary{
-		Total:  total,
-		Passed: passed,
-		Failed: total - passed,
+		Total:    total,
+		Passed:   passed,
+		Failed:   total - passed,
+		Warnings: warnings,
 	}
 
 	data, _ := json.MarshalIndent(report, "", "  ")
@@ -141,7 +161,9 @@ func FormatText(results []checker.RunResult) string {
 		b.WriteString(fmt.Sprintf("\n=== %s ===\n", r.Domain))
 		for _, res := range r.Results {
 			status := "PASS"
-			if !res.Passed {
+			if res.Warning {
+				status = "WARN"
+			} else if !res.Passed {
 				status = "FAIL"
 			}
 			b.WriteString(fmt.Sprintf("  [%s] %s: %s\n", status, res.Checker, res.Details))
