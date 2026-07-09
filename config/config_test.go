@@ -59,8 +59,8 @@ aliases:
 	if cfg.Web.HTTP != HTTPRedirect {
 		t.Errorf("Web.HTTP = %q, want %q", cfg.Web.HTTP, HTTPRedirect)
 	}
-	if !cfg.Web.HTTPS {
-		t.Error("Web.HTTPS should be true")
+	if cfg.Web.HTTPS != HTTPAny {
+		t.Errorf("Web.HTTPS = %q, want %q", cfg.Web.HTTPS, HTTPAny)
 	}
 	if len(cfg.Aliases) != 1 {
 		t.Fatalf("len(Aliases) = %d, want 1", len(cfg.Aliases))

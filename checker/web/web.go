@@ -16,16 +16,11 @@ import (
 	"github.com/quic-go/quic-go/http3"
 )
 
-// RunAutoChecks performs automatic HTTP checks:
-// - Port 80: HTTP/1.1, expect redirect (301/302) or direct (200) based on mode
-// - Port 443: HTTP/2, expect 200 (only if enableHTTPS is true)
-// - HTTP/3: only if Alt-Svc h3 detected in HTTP/2 response (only if enableHTTPS is true)
-// hasHTTPSCheck: dns.https config is set (yes/no/maybe)
-// httpsRecordExists: HTTPS DNS record actually exists in DNS
-// httpsCheckMode: "yes", "no", "maybe", or "" (not set)
-// httpMode: "redirect" (default) or "direct" for port 80 behavior
-// enableHTTPS: whether to check HTTPS on port 443
-func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, enableHTTPS bool) []*checker.Result {
+// RunAutoChecks performs automatic web checks:
+// - Port 80: HTTP/1.1 with httpMode
+// - Port 443: HTTP/2 with httpsMode (only if httpsMode != "no")
+// - HTTP/3: only if Alt-Svc h3 detected and httpsMode != "no"
+func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string) []*checker.Result {
 	var results []*checker.Result
 
 	ipv4, ipv6 := resolveBoth(domain)
@@ -33,25 +28,25 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 	// Port 80 - HTTP/1.1 check (skip if mode is "no")
 	if httpMode != "no" {
 		if ipv4 != "" {
-			results = append(results, checkHTTPPort80(domain, "ipv4", ipv4, httpMode))
+			results = append(results, checkPort(domain, "ipv4", ipv4, 80, "http", "http1", httpMode))
 		}
 		if ipv6 != "" {
-			results = append(results, checkHTTPPort80(domain, "ipv6", ipv6, httpMode))
+			results = append(results, checkPort(domain, "ipv6", ipv6, 80, "http", "http1", httpMode))
 		}
 	}
 
-	// Port 443 - HTTPS HTTP/2 check (only if enabled)
+	// Port 443 - HTTPS check (skip if mode is "no")
 	var altSvc string
-	if enableHTTPS {
+	if httpsMode != "no" {
 		if ipv4 != "" {
-			res := checkHTTPSH2(domain, "ipv4", ipv4)
+			res := checkPort(domain, "ipv4", ipv4, 443, "https", "http2", httpsMode)
 			results = append(results, res)
 			if res.AltSvc != "" {
 				altSvc = res.AltSvc
 			}
 		}
 		if ipv6 != "" {
-			res := checkHTTPSH2(domain, "ipv6", ipv6)
+			res := checkPort(domain, "ipv6", ipv6, 443, "https", "http2", httpsMode)
 			results = append(results, res)
 			if res.AltSvc != "" && altSvc == "" {
 				altSvc = res.AltSvc
@@ -59,8 +54,8 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 		}
 	}
 
-	// HTTP/3 check - only if Alt-Svc h3 detected and HTTPS enabled
-	if enableHTTPS && strings.Contains(altSvc, "h3") {
+	// HTTP/3 check - only if Alt-Svc h3 detected and httpsMode != "no"
+	if httpsMode != "no" && strings.Contains(altSvc, "h3") {
 		if ipv4 != "" {
 			results = append(results, checkHTTP3(domain, "ipv4", ipv4))
 		}
@@ -72,7 +67,7 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 	hasH3 := strings.Contains(altSvc, "h3")
 
 	// Info: HTTP/3 supported, HTTPS check is optional (maybe), but record doesn't exist
-	if enableHTTPS && hasH3 && httpsCheckMode == "maybe" && !httpsRecordExists {
+	if httpsMode != "no" && hasH3 && httpsCheckMode == "maybe" && !httpsRecordExists {
 		results = append(results, &checker.Result{
 			Checker: "dns-https-info",
 			Domain:  domain,
@@ -83,7 +78,7 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 	}
 
 	// Warn: HTTPS DNS record exists but server doesn't advertise Alt-Svc
-	if enableHTTPS && httpsRecordExists && !hasH3 {
+	if httpsMode != "no" && httpsRecordExists && !hasH3 {
 		results = append(results, &checker.Result{
 			Checker: "http-alt-svc-warn",
 			Domain:  domain,
@@ -105,28 +100,43 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 	return results
 }
 
-func checkHTTPPort80(domain, ipVer, ip string, mode string) *checker.Result {
+// checkPort performs a single HTTP/HTTPS check with mode validation
+func checkPort(domain, ipVer, ip string, port int, scheme, protocol, mode string) *checker.Result {
+	checkerName := fmt.Sprintf("%s-%s-%s", scheme, protocol, ipVer)
+	if scheme == "http" {
+		checkerName = fmt.Sprintf("%s-%s", scheme, ipVer)
+	}
+
 	result := &checker.Result{
-		Checker: fmt.Sprintf("http-%s", ipVer),
+		Checker: checkerName,
 		Domain:  domain,
 		Passed:  false,
 	}
 
 	u := &url.URL{
-		Scheme: "http",
+		Scheme: scheme,
 		Host:   domain,
 		Path:   "/",
 	}
 
 	protocols := &http.Protocols{}
-	protocols.SetHTTP1(true)
-	protocols.SetHTTP2(false)
+	if protocol == "http1" {
+		protocols.SetHTTP1(true)
+		protocols.SetHTTP2(false)
+	} else {
+		protocols.SetHTTP1(false)
+		protocols.SetHTTP2(true)
+	}
 
 	transport := &http.Transport{
-		DialContext: dialContext(80, ip),
-		Protocols:  protocols,
+		DialContext:            dialContext(port, ip),
+		Protocols:             protocols,
 		ResponseHeaderTimeout: 10 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
+	}
+
+	if scheme == "https" {
+		transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -162,7 +172,7 @@ func checkHTTPPort80(domain, ipVer, ip string, mode string) *checker.Result {
 	case "direct":
 		result.Passed = isOK
 	case "any":
-		result.Passed = isOK // 200 or 301/302 are both OK
+		result.Passed = isOK
 	default:
 		result.Passed = isOK
 	}
@@ -172,64 +182,8 @@ func checkHTTPPort80(domain, ipVer, ip string, mode string) *checker.Result {
 	if loc := resp.Header.Get("Location"); loc != "" {
 		result.RedirectTo = loc
 	}
-	return result
-}
-
-func checkHTTPSH2(domain, ipVer, ip string) *checker.Result {
-	result := &checker.Result{
-		Checker: fmt.Sprintf("https-http2-%s", ipVer),
-		Domain:  domain,
-		Passed:  false,
-	}
-
-	u := &url.URL{
-		Scheme: "https",
-		Host:   domain,
-		Path:   "/",
-	}
-
-	protocols := &http.Protocols{}
-	protocols.SetHTTP1(false)
-	protocols.SetHTTP2(true)
-
-	transport := &http.Transport{
-		DialContext: dialContext(443, ip),
-		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
-		Protocols:             protocols,
-		ResponseHeaderTimeout: 10 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   15 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if err != nil {
-		result.Details = fmt.Sprintf("request error: %v", err)
-		return result
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		result.Details = fmt.Sprintf("request failed: %v", err)
-		return result
-	}
-	defer resp.Body.Close()
-
-	result.Passed = resp.StatusCode >= 200 && resp.StatusCode < 400
-	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
-	result.HTTPVersion = resp.Proto
-	result.AltSvc = resp.Header.Get("Alt-Svc")
-	if loc := resp.Header.Get("Location"); loc != "" {
-		result.RedirectTo = loc
+	if altSvc := resp.Header.Get("Alt-Svc"); altSvc != "" {
+		result.AltSvc = altSvc
 	}
 	return result
 }

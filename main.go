@@ -75,7 +75,7 @@ func main() {
 			HasWeb: true,
 			Web: &config.WebChecks{
 				HTTP:  config.HTTPAny,
-				HTTPS: true,
+				HTTPS: config.HTTPAny,
 			},
 		}
 	} else {
@@ -125,18 +125,16 @@ func printPlan(cfg *config.DomainConfig) {
 
 	if cfg.HasWeb {
 		httpMode := "any"
-		if cfg.Web != nil && cfg.Web.HTTP != "" {
-			httpMode = string(cfg.Web.HTTP)
-		}
-		https := true
+		httpsMode := "any"
 		if cfg.Web != nil {
-			https = cfg.Web.HTTPS
+			if cfg.Web.HTTP != "" {
+				httpMode = string(cfg.Web.HTTP)
+			}
+			if cfg.Web.HTTPS != "" {
+				httpsMode = string(cfg.Web.HTTPS)
+			}
 		}
-		httpInfo := fmt.Sprintf("HTTP(%s)", httpMode)
-		if https {
-			httpInfo += ", HTTPS(HTTP/2+HTTP/3)"
-		}
-		fmt.Fprintf(os.Stderr, "  Web: %s\n", httpInfo)
+		fmt.Fprintf(os.Stderr, "  Web: HTTP(%s), HTTPS(%s)\n", httpMode, httpsMode)
 	}
 
 	for _, alias := range cfg.Aliases {
@@ -160,18 +158,16 @@ func printPlan(cfg *config.DomainConfig) {
 		}
 		if alias.HasWeb {
 			httpMode := "any"
-			if alias.Web != nil && alias.Web.HTTP != "" {
-				httpMode = string(alias.Web.HTTP)
-			}
-			https := true
+			httpsMode := "any"
 			if alias.Web != nil {
-				https = alias.Web.HTTPS
+				if alias.Web.HTTP != "" {
+					httpMode = string(alias.Web.HTTP)
+				}
+				if alias.Web.HTTPS != "" {
+					httpsMode = string(alias.Web.HTTPS)
+				}
 			}
-			httpInfo := fmt.Sprintf("HTTP(%s)", httpMode)
-			if https {
-				httpInfo += ", HTTPS(HTTP/2+HTTP/3)"
-			}
-			fmt.Fprintf(os.Stderr, "  Web: %s\n", httpInfo)
+			fmt.Fprintf(os.Stderr, "  Web: HTTP(%s), HTTPS(%s)\n", httpMode, httpsMode)
 		}
 	}
 
@@ -292,14 +288,16 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 			httpsCheckMode = string(dnsChecks.HTTPS)
 		}
 		httpMode := "any"
-		enableHTTPS := true
+		httpsMode := "any"
 		if webChecks != nil {
 			if webChecks.HTTP != "" {
 				httpMode = string(webChecks.HTTP)
 			}
-			enableHTTPS = webChecks.HTTPS
+			if webChecks.HTTPS != "" {
+				httpsMode = string(webChecks.HTTPS)
+			}
 		}
-		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, enableHTTPS)
+		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode)
 
 		if dnsResult != nil {
 			var filtered []*checker.Result

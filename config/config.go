@@ -68,15 +68,15 @@ func (m *HTTPMode) UnmarshalYAML(value *yaml.Node) error {
 
 type WebChecks struct {
 	HTTP  HTTPMode `yaml:"http,omitempty"`
-	HTTPS bool     `yaml:"https,omitempty"`
+	HTTPS HTTPMode `yaml:"https,omitempty"`
 }
 
-// UnmarshalYAML handles empty web: section (sets defaults: http=any, https=true)
+// UnmarshalYAML handles empty web: section (sets defaults: http=any, https=any)
 func (w *WebChecks) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode && value.Value == "" {
 		// web: (empty) — defaults
 		w.HTTP = HTTPAny
-		w.HTTPS = true
+		w.HTTPS = HTTPAny
 		return nil
 	}
 	// Normal mapping
