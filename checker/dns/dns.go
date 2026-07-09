@@ -90,6 +90,12 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 			return []*checker.Result{result}, dnsResult, nil
 		}
 	} else if c.A == config.DNSMaybe {
+		for _, ip := range ipv4s {
+			result.Records = append(result.Records, checker.Record{
+				Type:  "A",
+				Value: ip,
+			})
+		}
 		if len(ipv4s) == 0 {
 			result.Details = "A records not found (optional)"
 		}
@@ -115,23 +121,33 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 			return []*checker.Result{result}, dnsResult, nil
 		}
 	} else if c.AAAA == config.DNSMaybe {
+		for _, ip := range ipv6s {
+			result.Records = append(result.Records, checker.Record{
+				Type:  "AAAA",
+				Value: ip,
+			})
+		}
 		if len(ipv6s) == 0 {
 			result.Details = "AAAA records not found (optional)"
 		}
 	}
 
+	// Build details message
 	parts := []string{}
-	if c.A == config.DNSYes {
-		parts = append(parts, fmt.Sprintf("A: %v", ipv4s))
+	if c.A == config.DNSYes || c.A == config.DNSMaybe {
+		if len(ipv4s) > 0 {
+			parts = append(parts, fmt.Sprintf("A: %v", ipv4s))
+		}
 	}
-	if c.AAAA == config.DNSYes {
-		parts = append(parts, fmt.Sprintf("AAAA: %v", ipv6s))
+	if c.AAAA == config.DNSYes || c.AAAA == config.DNSMaybe {
+		if len(ipv6s) > 0 {
+			parts = append(parts, fmt.Sprintf("AAAA: %v", ipv6s))
+		}
 	}
-	result.Details = fmt.Sprintf("%s resolved", domain)
 	if len(parts) > 0 {
-		result.Details += ": " + joinParts(parts)
-	} else {
-		result.Details = "no DNS checks configured"
+		result.Details = fmt.Sprintf("%s resolved: %s", domain, joinParts(parts))
+	} else if result.Details == "" {
+		result.Details = fmt.Sprintf("%s resolved", domain)
 	}
 
 	return []*checker.Result{result}, dnsResult, nil
