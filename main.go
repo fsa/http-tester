@@ -18,7 +18,7 @@ func main() {
 
 	flag.StringVar(&resolver, "resolver", "", "DNS resolver address (e.g. 8.8.8.8:53)")
 	flag.StringVar(&resolver, "r", "", "DNS resolver address (shorthand)")
-	flag.StringVar(&format, "format", "text", "output format: text, json")
+	flag.StringVar(&format, "format", "text", "output format: text, json, json-pretty, yaml")
 	flag.StringVar(&format, "f", "", "output format (shorthand)")
 	flag.StringVar(&domainFlag, "d", "", "test domain directly (no config file needed)")
 	flag.StringVar(&domainFlag, "domain", "", "test domain directly (shorthand)")
@@ -80,6 +80,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Print plan (only in text mode)
+	if format == "text" || format == "" {
+		printPlan(cfg)
+	}
+
 	var allResults []checker.RunResult
 
 	rr := runDomain(cfg.Name, cfg.DNS, cfg.Web, cfg.HasWeb, resolver)
@@ -92,6 +97,63 @@ func main() {
 
 	exitCode := report.Print(allResults, format)
 	os.Exit(exitCode)
+}
+
+func printPlan(cfg *config.DomainConfig) {
+	fmt.Fprintf(os.Stderr, "\n\033[36mTesting: %s\033[0m\n", cfg.Name)
+
+	if cfg.DNS != nil {
+		parts := []string{}
+		if cfg.DNS.A != "" {
+			parts = append(parts, fmt.Sprintf("A(%s)", cfg.DNS.A))
+		}
+		if cfg.DNS.AAAA != "" {
+			parts = append(parts, fmt.Sprintf("AAAA(%s)", cfg.DNS.AAAA))
+		}
+		if cfg.DNS.HTTPS != "" {
+			parts = append(parts, fmt.Sprintf("HTTPS(%s)", cfg.DNS.HTTPS))
+		}
+		if len(parts) > 0 {
+			fmt.Fprintf(os.Stderr, "  DNS: %s\n", strings.Join(parts, ", "))
+		}
+	}
+
+	if cfg.Web != nil || cfg.HasWeb {
+		httpMode := "any"
+		if cfg.Web != nil && cfg.Web.HTTP != "" {
+			httpMode = string(cfg.Web.HTTP)
+		}
+		https := true
+		if cfg.Web != nil {
+			https = cfg.Web.HTTPS
+		}
+		httpInfo := fmt.Sprintf("HTTP(%s)", httpMode)
+		if https {
+			httpInfo += ", HTTPS(HTTP/2+HTTP/3)"
+		}
+		fmt.Fprintf(os.Stderr, "  Web: %s\n", httpInfo)
+	}
+
+	for _, alias := range cfg.Aliases {
+		fmt.Fprintf(os.Stderr, "\n\033[36mAlias: %s\033[0m\n", alias.Name)
+		if alias.DNS != nil {
+			parts := []string{}
+			if alias.DNS.A != "" {
+				parts = append(parts, fmt.Sprintf("A(%s)", alias.DNS.A))
+			}
+			if alias.DNS.AAAA != "" {
+				parts = append(parts, fmt.Sprintf("AAAA(%s)", alias.DNS.AAAA))
+			}
+			if alias.DNS.HTTPS != "" {
+				parts = append(parts, fmt.Sprintf("HTTPS(%s)", alias.DNS.HTTPS))
+			}
+			if len(parts) > 0 {
+				fmt.Fprintf(os.Stderr, "  DNS: %s\n", strings.Join(parts, ", "))
+			}
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "\n")
 }
 
 func runDomain(domain string, dnsChecks *config.DNSChecks, webChecks *config.WebChecks, cfgHasWeb bool, resolver string) checker.RunResult {
