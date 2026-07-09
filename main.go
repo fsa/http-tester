@@ -155,6 +155,21 @@ func printPlan(cfg *config.DomainConfig) {
 				fmt.Fprintf(os.Stderr, "  DNS: %s\n", strings.Join(parts, ", "))
 			}
 		}
+		if alias.HasWeb {
+			httpMode := "any"
+			if alias.Web != nil && alias.Web.HTTP != "" {
+				httpMode = string(alias.Web.HTTP)
+			}
+			https := true
+			if alias.Web != nil {
+				https = alias.Web.HTTPS
+			}
+			httpInfo := fmt.Sprintf("HTTP(%s)", httpMode)
+			if https {
+				httpInfo += ", HTTPS(HTTP/2+HTTP/3)"
+			}
+			fmt.Fprintf(os.Stderr, "  Web: %s\n", httpInfo)
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "\n")
