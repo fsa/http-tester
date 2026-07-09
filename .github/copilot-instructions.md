@@ -7,7 +7,7 @@
 - `main.go` — точка входа, CLI, оркестрация
 - `config/config.go` — типы и парсинг YAML
 - `checker/dns/` — DNS проверки (A, AAAA, HTTPS, согласованность)
-- `checker/http/` — HTTP проверки (порт 80, 443, HTTP/2, HTTP/3)
+- `checker/web/` — Web проверки (порт 80, 443, HTTP/2, HTTP/3)
 - `report/report.go` — вывод (текст + JSON)
 
 ## Ключевые моменты

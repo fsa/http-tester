@@ -8,7 +8,7 @@ import (
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
-	httpchecker "http-tester/checker/http"
+	httpchecker "http-tester/checker/web"
 	"http-tester/config"
 	"http-tester/report"
 )
