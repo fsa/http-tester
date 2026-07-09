@@ -70,17 +70,78 @@ type WebChecks struct {
 	HTTPS bool     `yaml:"https,omitempty"`
 }
 
+// UnmarshalYAML handles empty web: section (sets defaults: http=redirect, https=true)
+func (w *WebChecks) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode && value.Value == "" {
+		// web: (empty) — defaults
+		w.HTTP = HTTPRedirect
+		w.HTTPS = true
+		return nil
+	}
+	// Normal mapping
+	type Alias WebChecks
+	var a Alias
+	if err := value.Decode(&a); err != nil {
+		return err
+	}
+	*w = WebChecks(a)
+	return nil
+}
+
 type AliasConfig struct {
-	Name string     `yaml:"name"`
-	DNS  *DNSChecks `yaml:"dns,omitempty"`
-	Web  *WebChecks `yaml:"web,omitempty"`
+	Name   string     `yaml:"name"`
+	DNS    *DNSChecks `yaml:"dns,omitempty"`
+	Web    *WebChecks `yaml:"web,omitempty"`
+	HasWeb bool       `yaml:"-"`
 }
 
 type DomainConfig struct {
 	Name    string        `yaml:"name"`
 	DNS     *DNSChecks    `yaml:"dns,omitempty"`
 	Web     *WebChecks    `yaml:"web,omitempty"`
+	HasWeb  bool          `yaml:"-"`
 	Aliases []AliasConfig `yaml:"aliases,omitempty"`
+}
+
+// UnmarshalYAML for DomainConfig to detect web: key presence
+func (d *DomainConfig) UnmarshalYAML(value *yaml.Node) error {
+	type Alias DomainConfig
+	var a Alias
+	if err := value.Decode(&a); err != nil {
+		return err
+	}
+	*d = DomainConfig(a)
+
+	// Check if web key exists in the YAML mapping
+	if value.Kind == yaml.MappingNode {
+		for i := 0; i < len(value.Content)-1; i += 2 {
+			if value.Content[i].Value == "web" {
+				d.HasWeb = true
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// UnmarshalYAML for AliasConfig to detect web: key presence
+func (a *AliasConfig) UnmarshalYAML(value *yaml.Node) error {
+	type Alias AliasConfig
+	var al Alias
+	if err := value.Decode(&al); err != nil {
+		return err
+	}
+	*a = AliasConfig(al)
+
+	if value.Kind == yaml.MappingNode {
+		for i := 0; i < len(value.Content)-1; i += 2 {
+			if value.Content[i].Value == "web" {
+				a.HasWeb = true
+				break
+			}
+		}
+	}
+	return nil
 }
 
 func LoadDomain(path string) (*DomainConfig, error) {
