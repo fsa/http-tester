@@ -1,3 +1,4 @@
 *.yaml
 http-tester
 .mimocode/
+dist/
