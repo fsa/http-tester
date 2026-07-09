@@ -25,6 +25,31 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 
 	ipv4, ipv6 := resolveBoth(domain)
 
+	// Check local IPv4/IPv6 connectivity
+	localIPv4, localIPv6 := checkLocalConnectivity()
+
+	// Add INFO messages if testing is not possible
+	if ipv4 != "" && !localIPv4 {
+		results = append(results, &checker.Result{
+			Checker: "web-info",
+			Domain:  domain,
+			Passed:  true,
+			Info:    true,
+			Details: "IPv4 tests skipped: no local IPv4 connectivity",
+		})
+		ipv4 = ""
+	}
+	if ipv6 != "" && !localIPv6 {
+		results = append(results, &checker.Result{
+			Checker: "web-info",
+			Domain:  domain,
+			Passed:  true,
+			Info:    true,
+			Details: "IPv6 tests skipped: no local IPv6 connectivity",
+		})
+		ipv6 = ""
+	}
+
 	// Port 80 - HTTP/1.1 check (skip if mode is "no")
 	if httpMode != "no" {
 		if ipv4 != "" {
@@ -273,4 +298,49 @@ func resolveBoth(domain string) (ipv4, ipv6 string) {
 		}
 	}
 	return ipv4, ipv6
+}
+
+// checkLocalConnectivity checks if the machine has IPv4 and IPv6 connectivity
+func checkLocalConnectivity() (hasIPv4, hasIPv6 bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return false, false
+	}
+
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ip, _, err := net.ParseCIDR(addr.String())
+			if err != nil {
+				continue
+			}
+			if ip.To4() != nil {
+				hasIPv4 = true
+			} else if ip.To16() != nil {
+				hasIPv6 = true
+			}
+		}
+	}
+
+	// Also try to connect to verify actual connectivity
+	if hasIPv4 {
+		conn, err := net.DialTimeout("tcp4", "1.1.1.1:80", 2*time.Second)
+		if err == nil {
+			conn.Close()
+		} else {
+			hasIPv4 = false
+		}
+	}
+
+	_ = ctx
+	return hasIPv4, hasIPv6
 }
