@@ -78,7 +78,7 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 			Domain:  domain,
 			Passed:  true,
 			Info:    true,
-			Details: "HTTP/3 supported but no HTTPS DNS record — consider adding https: yes",
+			Details: "HTTP/3 supported but no HTTPS DNS record — create HTTPS record for better performance",
 		})
 	}
 
