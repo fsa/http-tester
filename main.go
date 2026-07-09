@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
@@ -20,14 +21,34 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 	}
+
+	// Find config file: first arg not starting with "-" that isn't a flag value
+	var configFile string
+	var args []string
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if strings.HasPrefix(arg, "-") {
+			args = append(args, arg)
+			// If this flag has a value (next arg doesn't start with "-"), add it too
+			if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
+				i++
+				args = append(args, os.Args[i])
+			}
+		} else if configFile == "" {
+			configFile = arg
+		} else {
+			args = append(args, arg)
+		}
+	}
+
+	// Parse flags from filtered args
+	os.Args = append([]string{os.Args[0]}, args...)
 	flag.Parse()
 
-	if flag.NArg() < 1 {
+	if configFile == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
-
-	configFile := flag.Arg(0)
 
 	cfg, err := config.LoadDomain(configFile)
 	if err != nil {
@@ -87,7 +108,6 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, enableHTTP bool, reso
 				}}
 			} else {
 				if dnsChecks.HTTPS == config.DNSNo {
-					// Expect NO HTTPS records
 					for _, r := range results {
 						if r.Passed && len(r.Records) > 0 {
 							r.Passed = false
@@ -98,7 +118,6 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, enableHTTP bool, reso
 						}
 					}
 				} else if dnsChecks.HTTPS == config.DNSMaybe {
-					// Optional - check if records exist, run consistency if they do
 					httpsFound := false
 					for _, r := range results {
 						if r.Passed && len(r.Records) > 0 {
@@ -122,7 +141,6 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, enableHTTP bool, reso
 						results = append(results, consResults...)
 					}
 				} else {
-					// "yes" - expect HTTPS records
 					httpsPassed := false
 					for _, r := range results {
 						if r.Passed {
@@ -153,15 +171,12 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, enableHTTP bool, reso
 		hasHTTPSCheck := dnsChecks != nil && dnsChecks.HTTPS != ""
 		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck)
 
-		// Filter results based on DNS availability
 		if dnsResult != nil {
 			var filtered []*checker.Result
 			for _, r := range results {
-				// Skip IPv4 checks if no A record
 				if contains(r.Checker, "ipv4") && !dnsResult.HasA {
 					continue
 				}
-				// Skip IPv6 checks if no AAAA record
 				if contains(r.Checker, "ipv6") && !dnsResult.HasAAAA {
 					continue
 				}
