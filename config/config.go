@@ -21,16 +21,41 @@ type DNSChecks struct {
 	HTTPS DNSRecordCheck `yaml:"https"`
 }
 
+type HTTPMode string
+
+const (
+	HTTPRedirect HTTPMode = "redirect"
+	HTTPDirect   HTTPMode = "direct"
+	HTTPNone     HTTPMode = ""
+)
+
+// UnmarshalYAML supports both string values and boolean true (treated as "redirect")
+func (m *HTTPMode) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		if value.Value == "true" {
+			*m = HTTPRedirect
+			return nil
+		}
+		if value.Value == "false" || value.Value == "" {
+			*m = HTTPNone
+			return nil
+		}
+		*m = HTTPMode(value.Value)
+		return nil
+	}
+	return nil
+}
+
 type AliasConfig struct {
 	Name string     `yaml:"name"`
 	DNS  *DNSChecks `yaml:"dns,omitempty"`
-	HTTP bool       `yaml:"http,omitempty"`
+	HTTP HTTPMode   `yaml:"http,omitempty"`
 }
 
 type DomainConfig struct {
 	Name    string        `yaml:"name"`
 	DNS     *DNSChecks    `yaml:"dns,omitempty"`
-	HTTP    bool          `yaml:"http,omitempty"`
+	HTTP    HTTPMode      `yaml:"http,omitempty"`
 	Aliases []AliasConfig `yaml:"aliases,omitempty"`
 }
 

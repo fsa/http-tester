@@ -17,21 +17,23 @@ import (
 )
 
 // RunAutoChecks performs automatic HTTP checks:
-// - Port 80: HTTP/1.1, expect 301/302 redirect
+// - Port 80: HTTP/1.1, expect redirect (301/302) or direct (200) based on mode
 // - Port 443: HTTP/2, expect 200
 // - HTTP/3: only if Alt-Svc h3 detected in HTTP/2 response
 // hasHTTPSCheck indicates if HTTPS DNS record is being checked
-func RunAutoChecks(domain string, hasHTTPSCheck bool) []*checker.Result {
+// httpMode: "redirect" (default) or "direct" for port 80 behavior
+func RunAutoChecks(domain string, hasHTTPSCheck bool, httpMode string) []*checker.Result {
 	var results []*checker.Result
 
 	ipv4, ipv6 := resolveBoth(domain)
 
-	// Port 80 - HTTP/1.1 redirect check
+	// Port 80 - HTTP/1.1 check
+	expectRedirect := httpMode != "direct"
 	if ipv4 != "" {
-		results = append(results, checkHTTPRedirect(domain, "http1", "ipv4", ipv4, 80))
+		results = append(results, checkHTTPPort80(domain, "ipv4", ipv4, expectRedirect))
 	}
 	if ipv6 != "" {
-		results = append(results, checkHTTPRedirect(domain, "http1", "ipv6", ipv6, 80))
+		results = append(results, checkHTTPPort80(domain, "ipv6", ipv6, expectRedirect))
 	}
 
 	// Port 443 - HTTPS HTTP/2 check
@@ -86,16 +88,15 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool) []*checker.Result {
 	return results
 }
 
-func checkHTTPRedirect(domain, protocol, ipVer, ip string, port int) *checker.Result {
+func checkHTTPPort80(domain, ipVer, ip string, expectRedirect bool) *checker.Result {
 	result := &checker.Result{
-		Checker: fmt.Sprintf("http-%s-%s", protocol, ipVer),
+		Checker: fmt.Sprintf("http-%s", ipVer),
 		Domain:  domain,
 		Passed:  false,
 	}
 
-	scheme := "http"
 	u := &url.URL{
-		Scheme: scheme,
+		Scheme: "http",
 		Host:   domain,
 		Path:   "/",
 	}
@@ -105,7 +106,7 @@ func checkHTTPRedirect(domain, protocol, ipVer, ip string, port int) *checker.Re
 	protocols.SetHTTP2(false)
 
 	transport := &http.Transport{
-		DialContext: dialContext(port, ip),
+		DialContext: dialContext(80, ip),
 		Protocols:  protocols,
 		ResponseHeaderTimeout: 10 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
@@ -135,7 +136,11 @@ func checkHTTPRedirect(domain, protocol, ipVer, ip string, port int) *checker.Re
 	}
 	defer resp.Body.Close()
 
-	result.Passed = resp.StatusCode == 301 || resp.StatusCode == 302
+	if expectRedirect {
+		result.Passed = resp.StatusCode == 301 || resp.StatusCode == 302
+	} else {
+		result.Passed = resp.StatusCode >= 200 && resp.StatusCode < 400
+	}
 	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
 	result.HTTPVersion = resp.Proto
 	if loc := resp.Header.Get("Location"); loc != "" {

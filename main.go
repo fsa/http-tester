@@ -70,7 +70,7 @@ func main() {
 	os.Exit(exitCode)
 }
 
-func runDomain(domain string, dnsChecks *config.DNSChecks, enableHTTP bool, resolver string) checker.RunResult {
+func runDomain(domain string, dnsChecks *config.DNSChecks, httpMode config.HTTPMode, resolver string) checker.RunResult {
 	rr := checker.RunResult{Domain: domain}
 
 	var dnsResult *dns.DNSResult
@@ -167,9 +167,9 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, enableHTTP bool, reso
 	}
 
 	// Run automatic HTTP checks if enabled
-	if enableHTTP {
+	if httpMode != "" {
 		hasHTTPSCheck := dnsChecks != nil && dnsChecks.HTTPS != ""
-		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck)
+		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, string(httpMode))
 
 		if dnsResult != nil {
 			var filtered []*checker.Result
