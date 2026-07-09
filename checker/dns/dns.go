@@ -133,20 +133,7 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 	}
 
 	// Build details message
-	parts := []string{}
-	if c.A == config.DNSYes || c.A == config.DNSMaybe {
-		if len(ipv4s) > 0 {
-			parts = append(parts, fmt.Sprintf("A: %v", ipv4s))
-		}
-	}
-	if c.AAAA == config.DNSYes || c.AAAA == config.DNSMaybe {
-		if len(ipv6s) > 0 {
-			parts = append(parts, fmt.Sprintf("AAAA: %v", ipv6s))
-		}
-	}
-	if len(parts) > 0 {
-		result.Details = fmt.Sprintf("%s resolved: %s", domain, joinParts(parts))
-	} else if result.Details == "" {
+	if result.Details == "" {
 		result.Details = fmt.Sprintf("%s resolved", domain)
 	}
 
