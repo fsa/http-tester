@@ -57,12 +57,14 @@ func main() {
 	if domainFlag != "" {
 		// Quick mode: test domain with default config
 		cfg = &config.DomainConfig{
-			Name: domainFlag,
+			Name:   domainFlag,
+			HasDNS: true,
 			DNS: &config.DNSChecks{
 				A:     config.DNSMaybe,
 				AAAA:  config.DNSMaybe,
 				HTTPS: config.DNSMaybe,
 			},
+			HasWeb: true,
 			Web: &config.WebChecks{
 				HTTP:  config.HTTPAny,
 				HTTPS: true,
