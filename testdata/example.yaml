@@ -3,11 +3,15 @@ dns:
   a: yes
   aaaa: yes
   https: maybe
-http: redirect
+web:
+  http: redirect
+  https: true
 aliases:
   - name: www.example.com
     dns:
       a: yes
       aaaa: yes
       https: no
-    http: redirect
+    web:
+      http: redirect
+      https: true

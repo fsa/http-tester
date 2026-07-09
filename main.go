@@ -58,11 +58,11 @@ func main() {
 
 	var allResults []checker.RunResult
 
-	rr := runDomain(cfg.Name, cfg.DNS, cfg.HTTP, *resolver)
+	rr := runDomain(cfg.Name, cfg.DNS, cfg.Web, *resolver)
 	allResults = append(allResults, rr)
 
 	for _, alias := range cfg.Aliases {
-		arr := runDomain(alias.Name, alias.DNS, alias.HTTP, *resolver)
+		arr := runDomain(alias.Name, alias.DNS, alias.Web, *resolver)
 		allResults = append(allResults, arr)
 	}
 
@@ -70,7 +70,7 @@ func main() {
 	os.Exit(exitCode)
 }
 
-func runDomain(domain string, dnsChecks *config.DNSChecks, httpMode config.HTTPMode, resolver string) checker.RunResult {
+func runDomain(domain string, dnsChecks *config.DNSChecks, webChecks *config.WebChecks, resolver string) checker.RunResult {
 	rr := checker.RunResult{Domain: domain}
 
 	var dnsResult *dns.DNSResult
@@ -167,9 +167,13 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, httpMode config.HTTPM
 	}
 
 	// Run automatic HTTP checks if enabled
-	if httpMode != "" {
+	if webChecks != nil && (webChecks.HTTP != "" || webChecks.HTTPS) {
 		hasHTTPSCheck := dnsChecks != nil && dnsChecks.HTTPS != ""
-		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, string(httpMode))
+		httpMode := string(webChecks.HTTP)
+		if httpMode == "" {
+			httpMode = "redirect"
+		}
+		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpMode, webChecks.HTTPS)
 
 		if dnsResult != nil {
 			var filtered []*checker.Result

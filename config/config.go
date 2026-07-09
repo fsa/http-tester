@@ -46,16 +46,21 @@ func (m *HTTPMode) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+type WebChecks struct {
+	HTTP  HTTPMode `yaml:"http,omitempty"`
+	HTTPS bool     `yaml:"https,omitempty"`
+}
+
 type AliasConfig struct {
 	Name string     `yaml:"name"`
 	DNS  *DNSChecks `yaml:"dns,omitempty"`
-	HTTP HTTPMode   `yaml:"http,omitempty"`
+	Web  *WebChecks `yaml:"web,omitempty"`
 }
 
 type DomainConfig struct {
 	Name    string        `yaml:"name"`
 	DNS     *DNSChecks    `yaml:"dns,omitempty"`
-	HTTP    HTTPMode      `yaml:"http,omitempty"`
+	Web     *WebChecks    `yaml:"web,omitempty"`
 	Aliases []AliasConfig `yaml:"aliases,omitempty"`
 }
 

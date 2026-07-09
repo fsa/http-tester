@@ -18,11 +18,12 @@ import (
 
 // RunAutoChecks performs automatic HTTP checks:
 // - Port 80: HTTP/1.1, expect redirect (301/302) or direct (200) based on mode
-// - Port 443: HTTP/2, expect 200
-// - HTTP/3: only if Alt-Svc h3 detected in HTTP/2 response
+// - Port 443: HTTP/2, expect 200 (only if enableHTTPS is true)
+// - HTTP/3: only if Alt-Svc h3 detected in HTTP/2 response (only if enableHTTPS is true)
 // hasHTTPSCheck indicates if HTTPS DNS record is being checked
 // httpMode: "redirect" (default) or "direct" for port 80 behavior
-func RunAutoChecks(domain string, hasHTTPSCheck bool, httpMode string) []*checker.Result {
+// enableHTTPS: whether to check HTTPS on port 443
+func RunAutoChecks(domain string, hasHTTPSCheck bool, httpMode string, enableHTTPS bool) []*checker.Result {
 	var results []*checker.Result
 
 	ipv4, ipv6 := resolveBoth(domain)
@@ -36,37 +37,37 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpMode string) []*checke
 		results = append(results, checkHTTPPort80(domain, "ipv6", ipv6, expectRedirect))
 	}
 
-	// Port 443 - HTTPS HTTP/2 check
+	// Port 443 - HTTPS HTTP/2 check (only if enabled)
 	var altSvc string
-	if ipv4 != "" {
-		res := checkHTTPSH2(domain, "ipv4", ipv4)
-		results = append(results, res)
-		if res.AltSvc != "" {
-			altSvc = res.AltSvc
+	if enableHTTPS {
+		if ipv4 != "" {
+			res := checkHTTPSH2(domain, "ipv4", ipv4)
+			results = append(results, res)
+			if res.AltSvc != "" {
+				altSvc = res.AltSvc
+			}
 		}
-	}
-	if ipv6 != "" {
-		res := checkHTTPSH2(domain, "ipv6", ipv6)
-		results = append(results, res)
-		if res.AltSvc != "" && altSvc == "" {
-			altSvc = res.AltSvc
+		if ipv6 != "" {
+			res := checkHTTPSH2(domain, "ipv6", ipv6)
+			results = append(results, res)
+			if res.AltSvc != "" && altSvc == "" {
+				altSvc = res.AltSvc
+			}
 		}
 	}
 
-	// HTTP/3 check - only if Alt-Svc h3 detected
-	if strings.Contains(altSvc, "h3") {
+	// HTTP/3 check - only if Alt-Svc h3 detected and HTTPS enabled
+	if enableHTTPS && strings.Contains(altSvc, "h3") {
 		if ipv4 != "" {
 			results = append(results, checkHTTP3(domain, "ipv4", ipv4))
 		}
 		if ipv6 != "" {
 			results = append(results, checkHTTP3(domain, "ipv6", ipv6))
 		}
-	} else if altSvc != "" {
-		// Alt-Svc exists but no h3 - just informational
 	}
 
 	// Warning: if HTTP/3 supported but no HTTPS DNS check
-	if strings.Contains(altSvc, "h3") && !hasHTTPSCheck {
+	if enableHTTPS && strings.Contains(altSvc, "h3") && !hasHTTPSCheck {
 		results = append(results, &checker.Result{
 			Checker: "dns-https-warn",
 			Domain:  domain,
