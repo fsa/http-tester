@@ -192,42 +192,44 @@ func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 		return []*checker.Result{result}, nil
 	}
 
-	// 3. Analyze each HTTPS record
-	var warnings []string
-	var errors []string
-	var info []string
+	// 3. Analyze each HTTPS record — return separate results
+	var results []*checker.Result
 
-	for _, h := range httpsRecords {
+	for i, h := range httpsRecords {
 		rec := parseHTTPSRecord(h)
 
-		if rec.IsAliasMode {
-			// AliasMode: Priority == 0
-			rr := analyzeAliasMode(domain, &rec, server, ctx)
-			warnings = append(warnings, rr.warnings...)
-			errors = append(errors, rr.errors...)
-			info = append(info, rr.info...)
-		} else {
-			// ServiceMode: Priority > 0
-			rr := analyzeServiceMode(domain, &rec, a4s, a6s, server, ctx)
-			warnings = append(warnings, rr.warnings...)
-			errors = append(errors, rr.errors...)
-			info = append(info, rr.info...)
+		recResult := &checker.Result{
+			Checker: "dns-consistency",
+			Domain:  domain,
+			Passed:  true,
 		}
+
+		if rec.IsAliasMode {
+			rr := analyzeAliasMode(domain, &rec, server, ctx)
+			applyResult(recResult, fmt.Sprintf("record #%d (AliasMode, priority=%d)", i+1, rec.Priority), rr)
+		} else {
+			rr := analyzeServiceMode(domain, &rec, a4s, a6s, server, ctx)
+			applyResult(recResult, fmt.Sprintf("record #%d (ServiceMode, priority=%d)", i+1, rec.Priority), rr)
+		}
+
+		results = append(results, recResult)
 	}
 
-	// 4. Build result
-	if len(errors) > 0 {
-		result.Passed = false
-		result.Details = strings.Join(errors, "; ")
-	} else if len(warnings) > 0 {
-		result.Details = strings.Join(warnings, "; ")
-	} else if len(info) > 0 {
-		result.Details = strings.Join(info, "; ")
+	return results, nil
+}
+
+// applyResult sets the result fields based on analyzeResult
+func applyResult(r *checker.Result, prefix string, ar analyzeResult) {
+	if len(ar.errors) > 0 {
+		r.Passed = false
+		r.Details = prefix + ": " + strings.Join(ar.errors, "; ")
+	} else if len(ar.warnings) > 0 {
+		r.Details = prefix + ": " + strings.Join(ar.warnings, "; ")
+	} else if len(ar.info) > 0 {
+		r.Details = prefix + ": " + strings.Join(ar.info, "; ")
 	} else {
-		result.Details = fmt.Sprintf("consistent: %d HTTPS record(s) validated", len(httpsRecords))
+		r.Details = prefix + ": OK"
 	}
-
-	return []*checker.Result{result}, nil
 }
 
 type analyzeResult struct {
@@ -242,21 +244,23 @@ func analyzeAliasMode(domain string, rec *HTTPSRecordInfo, server string, ctx co
 
 	// Target must be a valid domain, not '.'
 	if rec.Target == "" || rec.Target == "." {
-		r.errors = append(r.errors, "AliasMode record has empty or '.' target")
+		r.errors = append(r.errors, "empty or '.' target in AliasMode")
 		return r
 	}
 
+	r.info = append(r.info, fmt.Sprintf("target → %s", rec.Target))
+
 	// Parameters should not exist in AliasMode
 	if rec.HasParams {
-		r.warnings = append(r.warnings, "AliasMode (priority 0) has parameters — they will be ignored by browsers")
+		r.warnings = append(r.warnings, "parameters present — will be ignored by browsers")
 	}
 
 	// Follow: query HTTPS record for the Target domain
 	targetRecords := queryHTTPS(ctx, rec.Target, server)
 	if len(targetRecords) == 0 {
-		r.info = append(r.info, fmt.Sprintf("AliasMode target %s has no HTTPS records", rec.Target))
+		r.warnings = append(r.warnings, fmt.Sprintf("target %s has no HTTPS records", rec.Target))
 	} else {
-		r.info = append(r.info, fmt.Sprintf("AliasMode → %s (%d HTTPS record(s))", rec.Target, len(targetRecords)))
+		r.info = append(r.info, fmt.Sprintf("target resolved: %d HTTPS record(s)", len(targetRecords)))
 	}
 
 	return r
@@ -266,44 +270,42 @@ func analyzeAliasMode(domain string, rec *HTTPSRecordInfo, server string, ctx co
 func analyzeServiceMode(domain string, rec *HTTPSRecordInfo, a4s, a6s []string, server string, ctx context.Context) analyzeResult {
 	r := analyzeResult{}
 
-	// Target == '.' means "use the query name"
+	// Target
 	if rec.Target == "" || rec.Target == "." {
-		r.info = append(r.info, "ServiceMode: target is self (same domain)")
+		r.info = append(r.info, "target: self (same domain)")
 	} else {
-		r.info = append(r.info, fmt.Sprintf("ServiceMode: target = %s", rec.Target))
+		r.info = append(r.info, fmt.Sprintf("target: %s", rec.Target))
 	}
 
-	// alpn is mandatory in ServiceMode
+	// alpn
 	if !rec.HasAlpn {
-		r.warnings = append(r.warnings, "ServiceMode missing mandatory 'alpn' parameter")
+		r.warnings = append(r.warnings, "missing mandatory 'alpn' parameter")
 	} else {
-		// Check for h2/h3 in alpn values
-		hasH2 := false
-		hasH3 := false
+		var proto []string
 		for _, a := range rec.Alpn {
-			if a == "h2" {
-				hasH2 = true
-			}
-			if a == "h3" || strings.HasPrefix(a, "h3-") {
-				hasH3 = true
+			if a == "h2" || a == "h3" || strings.HasPrefix(a, "h3-") {
+				proto = append(proto, a)
 			}
 		}
-		if hasH2 {
-			r.info = append(r.info, "alpn includes h2 (HTTP/2)")
-		}
-		if hasH3 {
-			r.info = append(r.info, "alpn includes h3 (HTTP/3)")
+		if len(proto) > 0 {
+			r.info = append(r.info, fmt.Sprintf("alpn: %s", strings.Join(proto, ", ")))
 		}
 	}
 
-	// Cross-check hints with actual A/AAAA records
+	// Hints
 	if rec.HasHint4 {
-		if !hasOverlap(a4s, rec.IPv4Hint) && !hasOverlap(a6s, rec.IPv4Hint) {
+		overlap := hasOverlap(a4s, rec.IPv4Hint) || hasOverlap(a6s, rec.IPv4Hint)
+		if overlap {
+			r.info = append(r.info, fmt.Sprintf("ipv4hint: %v ✓", rec.IPv4Hint))
+		} else {
 			r.warnings = append(r.warnings, fmt.Sprintf("ipv4hint %v not found in A/AAAA records", rec.IPv4Hint))
 		}
 	}
 	if rec.HasHint6 {
-		if !hasOverlap(a6s, rec.IPv6Hint) && !hasOverlap(a4s, rec.IPv6Hint) {
+		overlap := hasOverlap(a6s, rec.IPv6Hint) || hasOverlap(a4s, rec.IPv6Hint)
+		if overlap {
+			r.info = append(r.info, fmt.Sprintf("ipv6hint: %v ✓", rec.IPv6Hint))
+		} else {
 			r.warnings = append(r.warnings, fmt.Sprintf("ipv6hint %v not found in A/AAAA records", rec.IPv6Hint))
 		}
 	}
