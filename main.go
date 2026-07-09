@@ -29,6 +29,25 @@ func main() {
 		flag.PrintDefaults()
 	}
 
+	// Parse arguments: find domain/config and collect flags in order
+	var positional []string
+	var flagArgs []string
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if strings.HasPrefix(arg, "-") {
+			flagArgs = append(flagArgs, arg)
+			// If flag has a value (next arg doesn't start with "-")
+			if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
+				i++
+				flagArgs = append(flagArgs, os.Args[i])
+			}
+		} else {
+			positional = append(positional, arg)
+		}
+	}
+
+	// Replace os.Args with just flags for flag.Parse
+	os.Args = append([]string{os.Args[0]}, flagArgs...)
 	flag.Parse()
 
 	var cfg *config.DomainConfig
@@ -41,10 +60,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
-	} else if flag.NArg() > 0 {
+	} else if len(positional) > 0 {
 		// Quick mode: test domain with default config
 		cfg = &config.DomainConfig{
-			Name:   flag.Arg(0),
+			Name:   positional[0],
 			HasDNS: true,
 			DNS: &config.DNSChecks{
 				A:     config.DNSMaybe,
