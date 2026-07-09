@@ -161,7 +161,7 @@ func checkHTTPPort80(domain, ipVer, ip string, mode string) *checker.Result {
 		result.Passed = isRedirect
 	case "direct":
 		result.Passed = isOK
-	case "auto":
+	case "any":
 		result.Passed = isOK // 200 or 301/302 are both OK
 	default:
 		result.Passed = isOK

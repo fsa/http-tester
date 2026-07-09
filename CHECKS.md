@@ -100,7 +100,7 @@ dns.https = maybe:
   Отправляем GET http://domain/ (HTTP/1.1)
   Не следуем редиректам (CheckRedirect = ErrUseLastResponse)
 
-  web.http = auto (по умолчанию):
+  web.http = any (по умолчанию):
     Ожидаем: 200-399 (включая 301/302)
     Если другое → FAIL
 
