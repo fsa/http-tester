@@ -142,28 +142,49 @@ func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 	}
 
 	inconsistencies := []string{}
+	hintsFound := false
+
 	for _, h := range httpsRecords {
-		target := h.Target
-		if target == "." || target == "" {
+		// Extract ipv4hint and ipv6hint from SVCB parameters
+		var hint4s, hint6s []string
+		for _, v := range h.Value {
+			switch v.Key() {
+			case mdns.SVCB_IPV4HINT:
+				// ipv4hint contains IPs directly
+				if ipVal, ok := v.(*mdns.SVCBIPv4Hint); ok {
+					for _, ip := range ipVal.Hint {
+						hint4s = append(hint4s, ip.String())
+					}
+				}
+			case mdns.SVCB_IPV6HINT:
+				// ipv6hint contains IPs directly
+				if ipVal, ok := v.(*mdns.SVCBIPv6Hint); ok {
+					for _, ip := range ipVal.Hint {
+						hint6s = append(hint6s, ip.String())
+					}
+				}
+			}
+		}
+
+		// If no hints found, skip this record
+		if len(hint4s) == 0 && len(hint6s) == 0 {
 			continue
 		}
-		t4s, t6s, err := resolveIPs(ctx, target, server)
-		if err != nil {
-			inconsistencies = append(inconsistencies,
-				fmt.Sprintf("HTTPS target %s unresolvable: %v", target, err))
-			continue
-		}
-		if len(t4s) == 0 && len(t6s) == 0 {
-			inconsistencies = append(inconsistencies,
-				fmt.Sprintf("HTTPS target %s has no A/AAAA records", target))
-			continue
-		}
-		overlap := hasOverlap(a4s, t4s) || hasOverlap(a6s, t6s) || hasOverlap(a4s, t6s) || hasOverlap(a6s, t4s)
+		hintsFound = true
+
+		// Check if hints overlap with A/AAAA records
+		overlap := hasOverlap(a4s, hint4s) || hasOverlap(a6s, hint6s) ||
+			hasOverlap(a4s, hint6s) || hasOverlap(a6s, hint4s)
 		if !overlap {
 			inconsistencies = append(inconsistencies,
-				fmt.Sprintf("HTTPS target %s resolves to %v/%v, domain resolves to %v/%v — no overlap",
-					target, t4s, t6s, a4s, a6s))
+				fmt.Sprintf("hints %v/%v do not match A/AAAA %v/%v",
+					hint4s, hint6s, a4s, a6s))
 		}
+	}
+
+	if !hintsFound {
+		result.Details = "no hints in HTTPS records, consistency check skipped"
+		return []*checker.Result{result}, nil
 	}
 
 	if len(inconsistencies) > 0 {
