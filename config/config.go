@@ -92,6 +92,7 @@ func (w *WebChecks) UnmarshalYAML(value *yaml.Node) error {
 type AliasConfig struct {
 	Name   string     `yaml:"name"`
 	DNS    *DNSChecks `yaml:"dns,omitempty"`
+	HasDNS bool       `yaml:"-"`
 	Web    *WebChecks `yaml:"web,omitempty"`
 	HasWeb bool       `yaml:"-"`
 }
@@ -99,12 +100,13 @@ type AliasConfig struct {
 type DomainConfig struct {
 	Name    string        `yaml:"name"`
 	DNS     *DNSChecks    `yaml:"dns,omitempty"`
+	HasDNS  bool          `yaml:"-"`
 	Web     *WebChecks    `yaml:"web,omitempty"`
 	HasWeb  bool          `yaml:"-"`
 	Aliases []AliasConfig `yaml:"aliases,omitempty"`
 }
 
-// UnmarshalYAML for DomainConfig to detect web: key presence
+// UnmarshalYAML for DomainConfig to detect dns: and web: key presence
 func (d *DomainConfig) UnmarshalYAML(value *yaml.Node) error {
 	type Alias DomainConfig
 	var a Alias
@@ -113,19 +115,26 @@ func (d *DomainConfig) UnmarshalYAML(value *yaml.Node) error {
 	}
 	*d = DomainConfig(a)
 
-	// Check if web key exists in the YAML mapping
+	// Check if dns/web keys exist in the YAML mapping
 	if value.Kind == yaml.MappingNode {
 		for i := 0; i < len(value.Content)-1; i += 2 {
-			if value.Content[i].Value == "web" {
+			key := value.Content[i].Value
+			if key == "dns" {
+				d.HasDNS = true
+				// Empty dns: means all records optional
+				if d.DNS == nil {
+					d.DNS = &DNSChecks{A: DNSMaybe, AAAA: DNSMaybe, HTTPS: DNSMaybe}
+				}
+			}
+			if key == "web" {
 				d.HasWeb = true
-				break
 			}
 		}
 	}
 	return nil
 }
 
-// UnmarshalYAML for AliasConfig to detect web: key presence
+// UnmarshalYAML for AliasConfig to detect dns: and web: key presence
 func (a *AliasConfig) UnmarshalYAML(value *yaml.Node) error {
 	type Alias AliasConfig
 	var al Alias
@@ -136,9 +145,15 @@ func (a *AliasConfig) UnmarshalYAML(value *yaml.Node) error {
 
 	if value.Kind == yaml.MappingNode {
 		for i := 0; i < len(value.Content)-1; i += 2 {
-			if value.Content[i].Value == "web" {
+			key := value.Content[i].Value
+			if key == "dns" {
+				a.HasDNS = true
+				if a.DNS == nil {
+					a.DNS = &DNSChecks{A: DNSMaybe, AAAA: DNSMaybe, HTTPS: DNSMaybe}
+				}
+			}
+			if key == "web" {
 				a.HasWeb = true
-				break
 			}
 		}
 	}

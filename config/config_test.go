@@ -99,9 +99,18 @@ web:
 		t.Fatalf("LoadDomain error: %v", err)
 	}
 
-	// Empty dns: results in nil pointer
-	if cfg.DNS != nil {
-		t.Errorf("Empty dns: DNS should be nil, got %+v", cfg.DNS)
+	// Empty dns: creates struct with all maybe
+	if cfg.DNS == nil {
+		t.Fatal("Empty dns: DNS should not be nil")
+	}
+	if cfg.DNS.A != DNSMaybe {
+		t.Errorf("Empty dns: A = %q, want %q", cfg.DNS.A, DNSMaybe)
+	}
+	if cfg.DNS.AAAA != DNSMaybe {
+		t.Errorf("Empty dns: AAAA = %q, want %q", cfg.DNS.AAAA, DNSMaybe)
+	}
+	if cfg.DNS.HTTPS != DNSMaybe {
+		t.Errorf("Empty dns: HTTPS = %q, want %q", cfg.DNS.HTTPS, DNSMaybe)
 	}
 }
 
