@@ -30,13 +30,14 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 
 	ipv4, ipv6 := resolveBoth(domain)
 
-	// Port 80 - HTTP/1.1 check
-	expectRedirect := httpMode != "direct"
-	if ipv4 != "" {
-		results = append(results, checkHTTPPort80(domain, "ipv4", ipv4, expectRedirect))
-	}
-	if ipv6 != "" {
-		results = append(results, checkHTTPPort80(domain, "ipv6", ipv6, expectRedirect))
+	// Port 80 - HTTP/1.1 check (skip if mode is "no")
+	if httpMode != "no" {
+		if ipv4 != "" {
+			results = append(results, checkHTTPPort80(domain, "ipv4", ipv4, httpMode))
+		}
+		if ipv6 != "" {
+			results = append(results, checkHTTPPort80(domain, "ipv6", ipv6, httpMode))
+		}
 	}
 
 	// Port 443 - HTTPS HTTP/2 check (only if enabled)
@@ -104,7 +105,7 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 	return results
 }
 
-func checkHTTPPort80(domain, ipVer, ip string, expectRedirect bool) *checker.Result {
+func checkHTTPPort80(domain, ipVer, ip string, mode string) *checker.Result {
 	result := &checker.Result{
 		Checker: fmt.Sprintf("http-%s", ipVer),
 		Domain:  domain,
@@ -152,11 +153,20 @@ func checkHTTPPort80(domain, ipVer, ip string, expectRedirect bool) *checker.Res
 	}
 	defer resp.Body.Close()
 
-	if expectRedirect {
-		result.Passed = resp.StatusCode == 301 || resp.StatusCode == 302
-	} else {
-		result.Passed = resp.StatusCode >= 200 && resp.StatusCode < 400
+	isRedirect := resp.StatusCode == 301 || resp.StatusCode == 302
+	isOK := resp.StatusCode >= 200 && resp.StatusCode < 400
+
+	switch mode {
+	case "redirect":
+		result.Passed = isRedirect
+	case "direct":
+		result.Passed = isOK
+	case "auto":
+		result.Passed = isOK // 200 or 301/302 are both OK
+	default:
+		result.Passed = isOK
 	}
+
 	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
 	result.HTTPVersion = resp.Proto
 	if loc := resp.Header.Get("Location"); loc != "" {

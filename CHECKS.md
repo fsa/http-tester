@@ -100,6 +100,10 @@ dns.https = maybe:
   Отправляем GET http://domain/ (HTTP/1.1)
   Не следуем редиректам (CheckRedirect = ErrUseLastResponse)
 
+  web.http = auto (по умолчанию):
+    Ожидаем: 200-399 (включая 301/302)
+    Если другое → FAIL
+
   web.http = redirect:
     Ожидаем: 301 или 302
     Если другое → FAIL
@@ -107,6 +111,9 @@ dns.https = maybe:
   web.http = direct:
     Ожидаем: 200-399
     Если другое → FAIL
+
+  web.http = no / false:
+    Проверка не выполняется
 
   Записываем: redirect_to (если есть Location header)
 ```

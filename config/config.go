@@ -43,23 +43,24 @@ func (d *DNSChecks) UnmarshalYAML(value *yaml.Node) error {
 type HTTPMode string
 
 const (
+	HTTPAuto     HTTPMode = "auto"
 	HTTPRedirect HTTPMode = "redirect"
 	HTTPDirect   HTTPMode = "direct"
+	HTTPNo       HTTPMode = "no"
 	HTTPNone     HTTPMode = ""
 )
 
-// UnmarshalYAML supports both string values and boolean true (treated as "redirect")
+// UnmarshalYAML supports string values and boolean aliases
 func (m *HTTPMode) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode {
-		if value.Value == "true" {
-			*m = HTTPRedirect
-			return nil
+		switch value.Value {
+		case "true", "yes":
+			*m = HTTPAuto
+		case "false", "no", "":
+			*m = HTTPNo
+		default:
+			*m = HTTPMode(value.Value)
 		}
-		if value.Value == "false" || value.Value == "" {
-			*m = HTTPNone
-			return nil
-		}
-		*m = HTTPMode(value.Value)
 		return nil
 	}
 	return nil
@@ -70,11 +71,11 @@ type WebChecks struct {
 	HTTPS bool     `yaml:"https,omitempty"`
 }
 
-// UnmarshalYAML handles empty web: section (sets defaults: http=redirect, https=true)
+// UnmarshalYAML handles empty web: section (sets defaults: http=auto, https=true)
 func (w *WebChecks) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode && value.Value == "" {
 		// web: (empty) — defaults
-		w.HTTP = HTTPRedirect
+		w.HTTP = HTTPAuto
 		w.HTTPS = true
 		return nil
 	}

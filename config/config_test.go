@@ -207,7 +207,7 @@ web:
 	if cfg.Web == nil {
 		t.Fatal("Web is nil")
 	}
-	if cfg.Web.HTTP != HTTPRedirect {
-		t.Errorf("http: true should be redirect, got %q", cfg.Web.HTTP)
+	if cfg.Web.HTTP != HTTPAuto {
+		t.Errorf("http: true should be auto, got %q", cfg.Web.HTTP)
 	}
 }

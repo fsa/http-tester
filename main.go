@@ -207,7 +207,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, webChecks *config.Web
 		if dnsChecks != nil {
 			httpsCheckMode = string(dnsChecks.HTTPS)
 		}
-		httpMode := "redirect"
+		httpMode := "auto"
 		enableHTTPS := true
 		if webChecks != nil {
 			if webChecks.HTTP != "" {
