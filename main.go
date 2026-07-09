@@ -29,27 +29,6 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	// Find domain or config: first arg not starting with "-" that isn't a flag value
-	var domainArg string
-	var args []string
-	for i := 1; i < len(os.Args); i++ {
-		arg := os.Args[i]
-		if strings.HasPrefix(arg, "-") {
-			args = append(args, arg)
-			// If this flag has a value (next arg doesn't start with "-"), add it too
-			if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
-				i++
-				args = append(args, os.Args[i])
-			}
-		} else if domainArg == "" {
-			domainArg = arg
-		} else {
-			args = append(args, arg)
-		}
-	}
-
-	// Parse flags from filtered args
-	os.Args = append([]string{os.Args[0]}, args...)
 	flag.Parse()
 
 	var cfg *config.DomainConfig
@@ -62,10 +41,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
-	} else if domainArg != "" {
+	} else if flag.NArg() > 0 {
 		// Quick mode: test domain with default config
 		cfg = &config.DomainConfig{
-			Name:   domainArg,
+			Name:   flag.Arg(0),
 			HasDNS: true,
 			DNS: &config.DNSChecks{
 				A:     config.DNSMaybe,
