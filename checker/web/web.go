@@ -35,7 +35,7 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 			Domain:  domain,
 			Passed:  true,
 			Info:    true,
-			Details: "IPv4 tests skipped: no local IPv4 connectivity",
+			Details: "IPv4 not available on this host — skipping IPv4 tests",
 		})
 		ipv4 = ""
 	}
@@ -45,7 +45,7 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 			Domain:  domain,
 			Passed:  true,
 			Info:    true,
-			Details: "IPv6 tests skipped: no local IPv6 connectivity",
+			Details: "IPv6 not available on this host — skipping IPv6 tests",
 		})
 		ipv6 = ""
 	}
