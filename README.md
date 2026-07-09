@@ -29,42 +29,42 @@
 ## Использование
 
 ```bash
-./http-tester [опции] <конфиг.yaml>
-./http-tester [опции] -d <домен>
+./http-tester [опции] <домен>
+./http-tester [опции] -c <config.yaml>
 ```
 
-Порядок аргументов произвольный — конфиг/домен и флаги можно располагать как удобно.
+По умолчанию принимает имя домена для быстрой проверки. Файл конфигурации передаётся через `-c`.
 
 ### Опции
 
 | Длинная | Короткая | Описание |
 |---------|----------|----------|
-| `--domain <домен>` | `-d` | Быстрый тест домена без конфига |
+| `--config <файл>` | `-c` | Файл конфигурации |
 | `--resolver <адрес>` | `-r` | DNS резолвер. Если порт не указан, используется 53 |
 | `--format <формат>` | `-f` | Формат вывода: `text`, `json`, `json-pretty`, `yaml` |
 
 ### Примеры
 
 ```bash
-# Быстрый тест домена (без конфига)
-./http-tester -d example.com
-./http-tester --domain tavda.info -f json
+# Быстрый тест домена (по умолчанию)
+./http-tester example.com
+./http-tester tavda.info -f json
 
 # С конфигом
-./http-tester config.yaml
+./http-tester -c config.yaml
 
 # С кастомным резолвером (порт 53 по умолчанию)
-./http-tester -r 8.8.8.8 config.yaml
+./http-tester -r 8.8.8.8 example.com
 
 # С кастомным резолвером и явным портом
-./http-tester --resolver 8.8.8.8:5353 config.yaml
+./http-tester --resolver 8.8.8.8:5353 -c config.yaml
 
 # IPv6 резолвер (в квадратных скобках)
-./http-tester -r [2001:4860:4860::8888] config.yaml
+./http-tester -r [2001:4860:4860::8888] example.com
 
 # Порядок аргументов произвольный
-./http-tester config.yaml -f json
-./http-tester -f json -r 1.1.1.1 config.yaml
+./http-tester example.com -f json
+./http-tester -f json -r 1.1.1.1 example.com
 ```
 
 ## Формат конфигурации

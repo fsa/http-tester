@@ -14,23 +14,23 @@ import (
 )
 
 func main() {
-	var resolver, format, domainFlag string
+	var resolver, format, configFile string
 
 	flag.StringVar(&resolver, "resolver", "", "DNS resolver address (e.g. 8.8.8.8:53)")
 	flag.StringVar(&resolver, "r", "", "DNS resolver address (shorthand)")
 	flag.StringVar(&format, "format", "text", "output format: text, json, json-pretty, yaml")
 	flag.StringVar(&format, "f", "", "output format (shorthand)")
-	flag.StringVar(&domainFlag, "d", "", "test domain directly (no config file needed)")
-	flag.StringVar(&domainFlag, "domain", "", "test domain directly (shorthand)")
+	flag.StringVar(&configFile, "config", "", "config file path")
+	flag.StringVar(&configFile, "c", "", "config file path (shorthand)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options] <config.yaml>\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "       %s [options] -d <domain>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] <domain>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "       %s [options] -c <config.yaml>\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 	}
 
-	// Find config file: first arg not starting with "-" that isn't a flag value
-	var configFile string
+	// Find domain or config: first arg not starting with "-" that isn't a flag value
+	var domainArg string
 	var args []string
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
@@ -41,8 +41,8 @@ func main() {
 				i++
 				args = append(args, os.Args[i])
 			}
-		} else if configFile == "" {
-			configFile = arg
+		} else if domainArg == "" {
+			domainArg = arg
 		} else {
 			args = append(args, arg)
 		}
@@ -54,10 +54,18 @@ func main() {
 
 	var cfg *config.DomainConfig
 
-	if domainFlag != "" {
+	if configFile != "" {
+		// Config mode: load from file
+		var err error
+		cfg, err = config.LoadDomain(configFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			os.Exit(1)
+		}
+	} else if domainArg != "" {
 		// Quick mode: test domain with default config
 		cfg = &config.DomainConfig{
-			Name:   domainFlag,
+			Name:   domainArg,
 			HasDNS: true,
 			DNS: &config.DNSChecks{
 				A:     config.DNSMaybe,
@@ -69,13 +77,6 @@ func main() {
 				HTTP:  config.HTTPAny,
 				HTTPS: true,
 			},
-		}
-	} else if configFile != "" {
-		var err error
-		cfg, err = config.LoadDomain(configFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
 		}
 	} else {
 		flag.Usage()
