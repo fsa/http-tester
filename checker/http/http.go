@@ -256,6 +256,9 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 	result.Passed = resp.StatusCode >= 200 && resp.StatusCode < 400
 	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
 	result.HTTPVersion = resp.Proto
+	if loc := resp.Header.Get("Location"); loc != "" {
+		result.RedirectTo = loc
+	}
 	return result
 }
 
