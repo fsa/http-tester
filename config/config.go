@@ -21,6 +21,25 @@ type DNSChecks struct {
 	HTTPS DNSRecordCheck `yaml:"https"`
 }
 
+// UnmarshalYAML handles empty dns: section (sets all to maybe)
+func (d *DNSChecks) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode && value.Value == "" {
+		// dns: (empty) — all records optional
+		d.A = DNSMaybe
+		d.AAAA = DNSMaybe
+		d.HTTPS = DNSMaybe
+		return nil
+	}
+	// Normal mapping
+	type Alias DNSChecks
+	var a Alias
+	if err := value.Decode(&a); err != nil {
+		return err
+	}
+	*d = DNSChecks(a)
+	return nil
+}
+
 type HTTPMode string
 
 const (

@@ -178,11 +178,15 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, webChecks *config.Web
 	// Run automatic HTTP checks if enabled
 	if webChecks != nil && (webChecks.HTTP != "" || webChecks.HTTPS) {
 		hasHTTPSCheck := dnsChecks != nil && dnsChecks.HTTPS != ""
+		httpsCheckMode := ""
+		if dnsChecks != nil {
+			httpsCheckMode = string(dnsChecks.HTTPS)
+		}
 		httpMode := string(webChecks.HTTP)
 		if httpMode == "" {
 			httpMode = "redirect"
 		}
-		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, string(dnsChecks.HTTPS), httpMode, webChecks.HTTPS)
+		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, webChecks.HTTPS)
 
 		if dnsResult != nil {
 			var filtered []*checker.Result
