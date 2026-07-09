@@ -86,7 +86,56 @@ func formatSVCB(priority uint16, target string, params []mdns.SVCBKeyValue) stri
 	return s
 }
 
-// ConsistencyCheck verifies that HTTPS records point to targets resolvable via A/AAAA.
+// HTTPSRecordInfo holds parsed information about a single HTTPS record
+type HTTPSRecordInfo struct {
+	Priority    uint16
+	Target      string
+	IsAliasMode bool // Priority == 0
+	Alpn        []string
+	HasAlpn     bool
+	IPv4Hint    []string
+	IPv6Hint    []string
+	HasHint4    bool
+	HasHint6    bool
+	HasParams   bool
+}
+
+// parseHTTPSRecord extracts structured info from an HTTPS record
+func parseHTTPSRecord(h *mdns.HTTPS) HTTPSRecordInfo {
+	info := HTTPSRecordInfo{
+		Priority:    h.Priority,
+		Target:      h.Target,
+		IsAliasMode: h.Priority == 0,
+	}
+
+	for _, v := range h.Value {
+		info.HasParams = true
+		switch key := v.Key(); key {
+		case mdns.SVCB_ALPN:
+			info.HasAlpn = true
+			if alpnVal, ok := v.(*mdns.SVCBAlpn); ok {
+				info.Alpn = append(info.Alpn, alpnVal.Alpn...)
+			}
+		case mdns.SVCB_IPV4HINT:
+			info.HasHint4 = true
+			if ipVal, ok := v.(*mdns.SVCBIPv4Hint); ok {
+				for _, ip := range ipVal.Hint {
+					info.IPv4Hint = append(info.IPv4Hint, ip.String())
+				}
+			}
+		case mdns.SVCB_IPV6HINT:
+			info.HasHint6 = true
+			if ipVal, ok := v.(*mdns.SVCBIPv6Hint); ok {
+				for _, ip := range ipVal.Hint {
+					info.IPv6Hint = append(info.IPv6Hint, ip.String())
+				}
+			}
+		}
+	}
+	return info
+}
+
+// ConsistencyCheck performs comprehensive HTTPS record validation per RFC 9460
 func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 	if server == "" {
 		server = "8.8.8.8:53"
@@ -101,6 +150,7 @@ func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 		Passed:  true,
 	}
 
+	// 1. Resolve A/AAAA for the domain
 	a4s, a6s, err := resolveIPs(ctx, domain, server)
 	if err != nil {
 		result.Passed = false
@@ -113,6 +163,7 @@ func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 		return []*checker.Result{result}, nil
 	}
 
+	// 2. Fetch HTTPS records
 	m := new(mdns.Msg)
 	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
 	m.RecursionDesired = true
@@ -141,60 +192,144 @@ func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 		return []*checker.Result{result}, nil
 	}
 
-	inconsistencies := []string{}
-	hintsFound := false
+	// 3. Analyze each HTTPS record
+	var warnings []string
+	var errors []string
+	var info []string
 
 	for _, h := range httpsRecords {
-		// Extract ipv4hint and ipv6hint from SVCB parameters
-		var hint4s, hint6s []string
-		for _, v := range h.Value {
-			switch v.Key() {
-			case mdns.SVCB_IPV4HINT:
-				// ipv4hint contains IPs directly
-				if ipVal, ok := v.(*mdns.SVCBIPv4Hint); ok {
-					for _, ip := range ipVal.Hint {
-						hint4s = append(hint4s, ip.String())
-					}
-				}
-			case mdns.SVCB_IPV6HINT:
-				// ipv6hint contains IPs directly
-				if ipVal, ok := v.(*mdns.SVCBIPv6Hint); ok {
-					for _, ip := range ipVal.Hint {
-						hint6s = append(hint6s, ip.String())
-					}
-				}
-			}
-		}
+		rec := parseHTTPSRecord(h)
 
-		// If no hints found, skip this record
-		if len(hint4s) == 0 && len(hint6s) == 0 {
-			continue
-		}
-		hintsFound = true
-
-		// Check if hints overlap with A/AAAA records
-		overlap := hasOverlap(a4s, hint4s) || hasOverlap(a6s, hint6s) ||
-			hasOverlap(a4s, hint6s) || hasOverlap(a6s, hint4s)
-		if !overlap {
-			inconsistencies = append(inconsistencies,
-				fmt.Sprintf("hints %v/%v do not match A/AAAA %v/%v",
-					hint4s, hint6s, a4s, a6s))
+		if rec.IsAliasMode {
+			// AliasMode: Priority == 0
+			rr := analyzeAliasMode(domain, &rec, server, ctx)
+			warnings = append(warnings, rr.warnings...)
+			errors = append(errors, rr.errors...)
+			info = append(info, rr.info...)
+		} else {
+			// ServiceMode: Priority > 0
+			rr := analyzeServiceMode(domain, &rec, a4s, a6s, server, ctx)
+			warnings = append(warnings, rr.warnings...)
+			errors = append(errors, rr.errors...)
+			info = append(info, rr.info...)
 		}
 	}
 
-	if !hintsFound {
-		result.Details = "no hints in HTTPS records, consistency check skipped"
-		return []*checker.Result{result}, nil
-	}
-
-	if len(inconsistencies) > 0 {
+	// 4. Build result
+	if len(errors) > 0 {
 		result.Passed = false
-		result.Details = strings.Join(inconsistencies, "; ")
+		result.Details = strings.Join(errors, "; ")
+	} else if len(warnings) > 0 {
+		result.Details = strings.Join(warnings, "; ")
+	} else if len(info) > 0 {
+		result.Details = strings.Join(info, "; ")
 	} else {
-		result.Details = fmt.Sprintf("consistent: %d HTTPS record(s) match A/AAAA", len(httpsRecords))
+		result.Details = fmt.Sprintf("consistent: %d HTTPS record(s) validated", len(httpsRecords))
 	}
 
 	return []*checker.Result{result}, nil
+}
+
+type analyzeResult struct {
+	warnings []string
+	errors   []string
+	info     []string
+}
+
+// analyzeAliasMode checks a Priority=0 HTTPS record
+func analyzeAliasMode(domain string, rec *HTTPSRecordInfo, server string, ctx context.Context) analyzeResult {
+	r := analyzeResult{}
+
+	// Target must be a valid domain, not '.'
+	if rec.Target == "" || rec.Target == "." {
+		r.errors = append(r.errors, "AliasMode record has empty or '.' target")
+		return r
+	}
+
+	// Parameters should not exist in AliasMode
+	if rec.HasParams {
+		r.warnings = append(r.warnings, "AliasMode (priority 0) has parameters — they will be ignored by browsers")
+	}
+
+	// Follow: query HTTPS record for the Target domain
+	targetRecords := queryHTTPS(ctx, rec.Target, server)
+	if len(targetRecords) == 0 {
+		r.info = append(r.info, fmt.Sprintf("AliasMode target %s has no HTTPS records", rec.Target))
+	} else {
+		r.info = append(r.info, fmt.Sprintf("AliasMode → %s (%d HTTPS record(s))", rec.Target, len(targetRecords)))
+	}
+
+	return r
+}
+
+// analyzeServiceMode checks a Priority>0 HTTPS record
+func analyzeServiceMode(domain string, rec *HTTPSRecordInfo, a4s, a6s []string, server string, ctx context.Context) analyzeResult {
+	r := analyzeResult{}
+
+	// Target == '.' means "use the query name"
+	if rec.Target == "" || rec.Target == "." {
+		r.info = append(r.info, "ServiceMode: target is self (same domain)")
+	} else {
+		r.info = append(r.info, fmt.Sprintf("ServiceMode: target = %s", rec.Target))
+	}
+
+	// alpn is mandatory in ServiceMode
+	if !rec.HasAlpn {
+		r.warnings = append(r.warnings, "ServiceMode missing mandatory 'alpn' parameter")
+	} else {
+		// Check for h2/h3 in alpn values
+		hasH2 := false
+		hasH3 := false
+		for _, a := range rec.Alpn {
+			if a == "h2" {
+				hasH2 = true
+			}
+			if a == "h3" || strings.HasPrefix(a, "h3-") {
+				hasH3 = true
+			}
+		}
+		if hasH2 {
+			r.info = append(r.info, "alpn includes h2 (HTTP/2)")
+		}
+		if hasH3 {
+			r.info = append(r.info, "alpn includes h3 (HTTP/3)")
+		}
+	}
+
+	// Cross-check hints with actual A/AAAA records
+	if rec.HasHint4 {
+		if !hasOverlap(a4s, rec.IPv4Hint) && !hasOverlap(a6s, rec.IPv4Hint) {
+			r.warnings = append(r.warnings, fmt.Sprintf("ipv4hint %v not found in A/AAAA records", rec.IPv4Hint))
+		}
+	}
+	if rec.HasHint6 {
+		if !hasOverlap(a6s, rec.IPv6Hint) && !hasOverlap(a4s, rec.IPv6Hint) {
+			r.warnings = append(r.warnings, fmt.Sprintf("ipv6hint %v not found in A/AAAA records", rec.IPv6Hint))
+		}
+	}
+
+	return r
+}
+
+// queryHTTPS fetches HTTPS records for a domain (used for AliasMode following)
+func queryHTTPS(ctx context.Context, domain, server string) []*mdns.HTTPS {
+	m := new(mdns.Msg)
+	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
+	m.RecursionDesired = true
+
+	client := new(mdns.Client)
+	resp, _, err := client.ExchangeContext(ctx, m, server)
+	if err != nil {
+		return nil
+	}
+
+	var records []*mdns.HTTPS
+	for _, rr := range resp.Answer {
+		if h, ok := rr.(*mdns.HTTPS); ok {
+			records = append(records, h)
+		}
+	}
+	return records
 }
 
 func resolveIPs(ctx context.Context, domain, server string) (ipv4s, ipv6s []string, err error) {
