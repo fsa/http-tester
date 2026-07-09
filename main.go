@@ -14,9 +14,14 @@ import (
 )
 
 func main() {
-	resolver := flag.String("resolver", "", "DNS resolver address (e.g. 8.8.8.8:53)")
-	format := flag.String("format", "text", "output format: text, json")
-	domainFlag := flag.String("d", "", "test domain directly (no config file needed)")
+	var resolver, format, domainFlag string
+
+	flag.StringVar(&resolver, "resolver", "", "DNS resolver address (e.g. 8.8.8.8:53)")
+	flag.StringVar(&resolver, "r", "", "DNS resolver address (shorthand)")
+	flag.StringVar(&format, "format", "text", "output format: text, json")
+	flag.StringVar(&format, "f", "", "output format (shorthand)")
+	flag.StringVar(&domainFlag, "d", "", "test domain directly (no config file needed)")
+	flag.StringVar(&domainFlag, "domain", "", "test domain directly (shorthand)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] <config.yaml>\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "       %s [options] -d <domain>\n\n", os.Args[0])
@@ -49,10 +54,10 @@ func main() {
 
 	var cfg *config.DomainConfig
 
-	if *domainFlag != "" {
+	if domainFlag != "" {
 		// Quick mode: test domain with default config
 		cfg = &config.DomainConfig{
-			Name: *domainFlag,
+			Name: domainFlag,
 			DNS: &config.DNSChecks{
 				A:     config.DNSMaybe,
 				AAAA:  config.DNSMaybe,
@@ -77,15 +82,15 @@ func main() {
 
 	var allResults []checker.RunResult
 
-	rr := runDomain(cfg.Name, cfg.DNS, cfg.Web, cfg.HasWeb, *resolver)
+	rr := runDomain(cfg.Name, cfg.DNS, cfg.Web, cfg.HasWeb, resolver)
 	allResults = append(allResults, rr)
 
 	for _, alias := range cfg.Aliases {
-		arr := runDomain(alias.Name, alias.DNS, alias.Web, alias.HasWeb, *resolver)
+		arr := runDomain(alias.Name, alias.DNS, alias.Web, alias.HasWeb, resolver)
 		allResults = append(allResults, arr)
 	}
 
-	exitCode := report.Print(allResults, *format)
+	exitCode := report.Print(allResults, format)
 	os.Exit(exitCode)
 }
 
