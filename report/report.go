@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"http-tester/checker"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -19,44 +21,48 @@ const (
 )
 
 type JSONReport struct {
-	Domains []JSONDomain `json:"domains"`
-	Summary JSONSummary  `json:"summary"`
+	Domains []JSONDomain `json:"domains" yaml:"domains"`
+	Summary JSONSummary  `json:"summary" yaml:"summary"`
 }
 
 type JSONDomain struct {
-	Name    string         `json:"name"`
-	Results []JSONResult   `json:"results"`
+	Name    string       `json:"name" yaml:"name"`
+	Results []JSONResult `json:"results" yaml:"results"`
 }
 
 type JSONResult struct {
-	Checker     string         `json:"checker"`
-	Passed      bool           `json:"passed"`
-	Warning     bool           `json:"warning,omitempty"`
-	Info        bool           `json:"info,omitempty"`
-	Details     string         `json:"details"`
-	Records     []JSONRecord   `json:"records,omitempty"`
-	HTTPVersion string         `json:"http_version,omitempty"`
-	AltSvc      string         `json:"alt_svc,omitempty"`
-	RedirectTo  string         `json:"redirect_to,omitempty"`
+	Checker     string       `json:"checker" yaml:"checker"`
+	Passed      bool         `json:"passed" yaml:"passed"`
+	Warning     bool         `json:"warning,omitempty" yaml:"warning,omitempty"`
+	Info        bool         `json:"info,omitempty" yaml:"info,omitempty"`
+	Details     string       `json:"details" yaml:"details"`
+	Records     []JSONRecord `json:"records,omitempty" yaml:"records,omitempty"`
+	HTTPVersion string       `json:"http_version,omitempty" yaml:"http_version,omitempty"`
+	AltSvc      string       `json:"alt_svc,omitempty" yaml:"alt_svc,omitempty"`
+	RedirectTo  string       `json:"redirect_to,omitempty" yaml:"redirect_to,omitempty"`
 }
 
 type JSONRecord struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	Type  string `json:"type" yaml:"type"`
+	Value string `json:"value" yaml:"value"`
 }
 
 type JSONSummary struct {
-	Total    int `json:"total"`
-	Passed   int `json:"passed"`
-	Failed   int `json:"failed"`
-	Warnings int `json:"warnings"`
-	Info     int `json:"info"`
+	Total    int `json:"total" yaml:"total"`
+	Passed   int `json:"passed" yaml:"passed"`
+	Failed   int `json:"failed" yaml:"failed"`
+	Warnings int `json:"warnings" yaml:"warnings"`
+	Info     int `json:"info" yaml:"info"`
 }
 
 func Print(results []checker.RunResult, format string) int {
 	switch format {
 	case "json":
-		return printJSON(results)
+		return printJSON(results, false)
+	case "json-pretty", "json_pretty", "json-verbose":
+		return printJSON(results, true)
+	case "yaml", "yml":
+		return printYAML(results)
 	default:
 		return printText(results)
 	}
@@ -117,7 +123,7 @@ func printText(results []checker.RunResult) int {
 	return 0
 }
 
-func printJSON(results []checker.RunResult) int {
+func buildReport(results []checker.RunResult) JSONReport {
 	report := JSONReport{}
 	total := 0
 	passed := 0
@@ -166,10 +172,37 @@ func printJSON(results []checker.RunResult) int {
 		Info:     infos,
 	}
 
-	data, _ := json.MarshalIndent(report, "", "  ")
+	return report
+}
+
+func printJSON(results []checker.RunResult, pretty bool) int {
+	report := buildReport(results)
+
+	var data []byte
+	if pretty {
+		data, _ = json.MarshalIndent(report, "", "  ")
+	} else {
+		data, _ = json.Marshal(report)
+	}
 	fmt.Fprintln(os.Stdout, string(data))
 
-	if passed < total {
+	if report.Summary.Passed < report.Summary.Total {
+		return 1
+	}
+	return 0
+}
+
+func printYAML(results []checker.RunResult) int {
+	report := buildReport(results)
+
+	data, err := yaml.Marshal(report)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "YAML marshal error: %v\n", err)
+		return 1
+	}
+	fmt.Fprint(os.Stdout, string(data))
+
+	if report.Summary.Passed < report.Summary.Total {
 		return 1
 	}
 	return 0
