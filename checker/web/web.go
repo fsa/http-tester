@@ -300,11 +300,8 @@ func resolveBoth(domain string) (ipv4, ipv6 string) {
 	return ipv4, ipv6
 }
 
-// checkLocalConnectivity checks if the machine has IPv4 and IPv6 connectivity
+// checkLocalConnectivity checks if the machine has IPv4 and IPv6 network interfaces
 func checkLocalConnectivity() (hasIPv4, hasIPv6 bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return false, false
@@ -331,16 +328,5 @@ func checkLocalConnectivity() (hasIPv4, hasIPv6 bool) {
 		}
 	}
 
-	// Also try to connect to verify actual connectivity
-	if hasIPv4 {
-		conn, err := net.DialTimeout("tcp4", "1.1.1.1:80", 2*time.Second)
-		if err == nil {
-			conn.Close()
-		} else {
-			hasIPv4 = false
-		}
-	}
-
-	_ = ctx
 	return hasIPv4, hasIPv6
 }
