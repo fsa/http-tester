@@ -16,8 +16,10 @@ import (
 func main() {
 	resolver := flag.String("resolver", "", "DNS resolver address (e.g. 8.8.8.8:53)")
 	format := flag.String("format", "text", "output format: text, json")
+	domainFlag := flag.String("d", "", "test domain directly (no config file needed)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options] <config.yaml>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] <config.yaml>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "       %s [options] -d <domain>\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 	}
@@ -45,14 +47,31 @@ func main() {
 	os.Args = append([]string{os.Args[0]}, args...)
 	flag.Parse()
 
-	if configFile == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
+	var cfg *config.DomainConfig
 
-	cfg, err := config.LoadDomain(configFile)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+	if *domainFlag != "" {
+		// Quick mode: test domain with default config
+		cfg = &config.DomainConfig{
+			Name: *domainFlag,
+			DNS: &config.DNSChecks{
+				A:     config.DNSMaybe,
+				AAAA:  config.DNSMaybe,
+				HTTPS: config.DNSMaybe,
+			},
+			Web: &config.WebChecks{
+				HTTP:  config.HTTPRedirect,
+				HTTPS: true,
+			},
+		}
+	} else if configFile != "" {
+		var err error
+		cfg, err = config.LoadDomain(configFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		flag.Usage()
 		os.Exit(1)
 	}
 
