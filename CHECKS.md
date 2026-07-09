@@ -151,9 +151,12 @@ dns.https = maybe:
 
 ### 2.4. Предупреждения и информация
 
-#### INFO: Нет HTTPS DNS записи
+#### INFO: Рекомендация добавить HTTPS запись
 
-**Когда:** `web.https = true` И обнаружен HTTP/3 И HTTPS DNS запись не задана в конфиге
+**Когда:** все три условия:
+1. `web.https = true` И обнаружен HTTP/3 (Alt-Svc: h3)
+2. `dns.https = maybe` (проверка опциональна)
+3. HTTPS DNS запись не найдена
 
 **Действие:** Выводим INFO:
 ```
@@ -162,7 +165,12 @@ HTTP/3 supported but no HTTPS DNS record — consider adding https: yes
 
 Не влияет на exit code.
 
-#### WARN: Нет Alt-Svc при наличии HTTPS записи
+**Почему только для maybe:**
+- `dns.https = yes` + нет записи → уже FAIL на этапе DNS
+- `dns.https = no` + нет записи → OK (ожидаемо)
+- `dns.https` не задан → пользователь не настраивал, не рекомендуем
+
+#### WARN: Аномалия — HTTPS запись есть, но Alt-Svc нет
 
 **Когда:** `web.https = true` И HTTPS DNS запись существует И сервер не отдаёт Alt-Svc
 
@@ -208,6 +216,24 @@ HTTPS DNS record exists but server does not advertise Alt-Svc header
 
 ---
 
+## 6. Сводная таблица поведения
+
+| Alt-Svc: h3 | HTTPS DNS запись | dns.https | Результат |
+|-------------|------------------|-----------|-----------|
+| есть | есть | yes | OK |
+| есть | есть | no | FAIL (DNS) |
+| есть | есть | maybe | OK |
+| есть | нет | yes | FAIL (DNS) |
+| есть | нет | no | OK |
+| есть | нет | maybe | **INFO** |
+| есть | нет | не задан | OK |
+| нет | есть | yes | OK |
+| нет | есть | no | FAIL (DNS) |
+| нет | есть | maybe | **WARN** |
+| нет | нет | любое | OK |
+
+---
+
 ## Пример конфига и ожидаемого поведения
 
 ```yaml
@@ -231,5 +257,5 @@ web:
 7. https-http2-ipv6 (порт 443 → 200) — если AAAA есть
 8. https-http3-ipv4 (если Alt-Svc: h3)
 9. https-http3-ipv6 (если Alt-Svc: h3) — если AAAA есть
-10. dns-https-info (если HTTP/3 есть, но dns.https не задан)
-11. http-alt-svc-warn (если HTTPS запись есть, но Alt-Svc нет)
+10. dns-https-info (если HTTPS maybe + нет записи + Alt-Svc: h3)
+11. http-alt-svc-warn (если HTTPS запись есть + нет Alt-Svc)

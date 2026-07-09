@@ -182,7 +182,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, webChecks *config.Web
 		if httpMode == "" {
 			httpMode = "redirect"
 		}
-		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, httpMode, webChecks.HTTPS)
+		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, string(dnsChecks.HTTPS), httpMode, webChecks.HTTPS)
 
 		if dnsResult != nil {
 			var filtered []*checker.Result
