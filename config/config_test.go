@@ -14,7 +14,7 @@ dns:
   https: no
 web:
   http: redirect
-  https: true
+  https: any
 aliases:
   - name: www.example.com
     dns:
@@ -191,11 +191,11 @@ dns:
 	}
 }
 
-func TestLoadDomain_HTTPModeFromBool(t *testing.T) {
+func TestLoadDomain_HTTPModeFromAny(t *testing.T) {
 	yaml := `
 name: example.com
 web:
-  http: true
+  http: any
 `
 	tmpFile, err := os.CreateTemp("", "config-*.yaml")
 	if err != nil {
@@ -217,6 +217,6 @@ web:
 		t.Fatal("Web is nil")
 	}
 	if cfg.Web.HTTP != HTTPAny {
-		t.Errorf("http: true should be any, got %q", cfg.Web.HTTP)
+		t.Errorf("http: any should be any, got %q", cfg.Web.HTTP)
 	}
 }

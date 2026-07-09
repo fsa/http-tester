@@ -5,7 +5,7 @@ dns:
   https: maybe
 web:
   http: redirect
-  https: true
+  https: any
 aliases:
   - name: www.example.com
     dns:
@@ -14,4 +14,4 @@ aliases:
       https: no
     web:
       http: redirect
-      https: true
+      https: any

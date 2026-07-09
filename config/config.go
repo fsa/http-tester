@@ -50,14 +50,14 @@ const (
 	HTTPNone     HTTPMode = ""
 )
 
-// UnmarshalYAML supports string values and boolean aliases
+// UnmarshalYAML supports: any, redirect, direct, no
 func (m *HTTPMode) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode {
 		switch value.Value {
-		case "true", "yes":
-			*m = HTTPAny
-		case "false", "no", "":
+		case "no":
 			*m = HTTPNo
+		case "any", "redirect", "direct", "":
+			*m = HTTPMode(value.Value)
 		default:
 			*m = HTTPMode(value.Value)
 		}
