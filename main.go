@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -11,17 +10,15 @@ import (
 	httpchecker "http-tester/checker/web"
 	"http-tester/config"
 	"http-tester/report"
+
+	flag "github.com/spf13/pflag"
 )
 
 func main() {
-	var resolver, format, configFile string
+	resolver := flag.StringP("resolver", "r", "", "DNS resolver address (e.g. 8.8.8.8:53)")
+	format := flag.StringP("format", "f", "text", "output format: text, json, json-pretty, yaml")
+	configFile := flag.StringP("config", "c", "", "config file path")
 
-	flag.StringVar(&resolver, "resolver", "", "DNS resolver address (e.g. 8.8.8.8:53)")
-	flag.StringVar(&resolver, "r", "", "DNS resolver address (shorthand)")
-	flag.StringVar(&format, "format", "text", "output format: text, json, json-pretty, yaml")
-	flag.StringVar(&format, "f", "", "output format (shorthand)")
-	flag.StringVar(&configFile, "config", "", "config file path")
-	flag.StringVar(&configFile, "c", "", "config file path (shorthand)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] <domain>\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "       %s [options] -c <config.yaml>\n\n", os.Args[0])
@@ -29,41 +26,22 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	// Parse arguments: find domain/config and collect flags in order
-	var positional []string
-	var flagArgs []string
-	for i := 1; i < len(os.Args); i++ {
-		arg := os.Args[i]
-		if strings.HasPrefix(arg, "-") {
-			flagArgs = append(flagArgs, arg)
-			// If flag has a value (next arg doesn't start with "-")
-			if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
-				i++
-				flagArgs = append(flagArgs, os.Args[i])
-			}
-		} else {
-			positional = append(positional, arg)
-		}
-	}
-
-	// Replace os.Args with just flags for flag.Parse
-	os.Args = append([]string{os.Args[0]}, flagArgs...)
 	flag.Parse()
 
 	var cfg *config.DomainConfig
 
-	if configFile != "" {
+	if *configFile != "" {
 		// Config mode: load from file
 		var err error
-		cfg, err = config.LoadDomain(configFile)
+		cfg, err = config.LoadDomain(*configFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
 		}
-	} else if len(positional) > 0 {
+	} else if flag.NArg() > 0 {
 		// Quick mode: test domain with default config
 		cfg = &config.DomainConfig{
-			Name:   positional[0],
+			Name:   flag.Arg(0),
 			HasDNS: true,
 			DNS: &config.DNSChecks{
 				A:     config.DNSMaybe,
@@ -82,21 +60,21 @@ func main() {
 	}
 
 	// Print plan (only in text mode)
-	if format == "text" || format == "" {
+	if *format == "text" || *format == "" {
 		printPlan(cfg)
 	}
 
 	var allResults []checker.RunResult
 
-	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolver)
+	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, *resolver)
 	allResults = append(allResults, rr)
 
 	for _, alias := range cfg.Aliases {
-		arr := runDomain(alias.Name, alias.DNS, alias.HasDNS, alias.Web, alias.HasWeb, resolver)
+		arr := runDomain(alias.Name, alias.DNS, alias.HasDNS, alias.Web, alias.HasWeb, *resolver)
 		allResults = append(allResults, arr)
 	}
 
-	exitCode := report.Print(allResults, format)
+	exitCode := report.Print(allResults, *format)
 	os.Exit(exitCode)
 }
 
@@ -255,7 +233,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 					httpsPassed := false
 					for _, r := range results {
 						if r.Passed {
-							httpsPassed = true
+						httpsPassed = true
 							break
 						}
 					}
