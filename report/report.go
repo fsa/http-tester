@@ -10,11 +10,12 @@ import (
 )
 
 const (
-	colorGreen = "\033[32m"
-	colorRed   = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorRed    = "\033[31m"
 	colorYellow = "\033[33m"
-	colorReset = "\033[0m"
-	colorCyan  = "\033[36m"
+	colorReset  = "\033[0m"
+	colorCyan   = "\033[36m"
+	colorWhite  = "\033[37m"
 )
 
 type JSONReport struct {
@@ -31,6 +32,7 @@ type JSONResult struct {
 	Checker     string         `json:"checker"`
 	Passed      bool           `json:"passed"`
 	Warning     bool           `json:"warning,omitempty"`
+	Info        bool           `json:"info,omitempty"`
 	Details     string         `json:"details"`
 	Records     []JSONRecord   `json:"records,omitempty"`
 	HTTPVersion string         `json:"http_version,omitempty"`
@@ -48,6 +50,7 @@ type JSONSummary struct {
 	Passed   int `json:"passed"`
 	Failed   int `json:"failed"`
 	Warnings int `json:"warnings"`
+	Info     int `json:"info"`
 }
 
 func Print(results []checker.RunResult, format string) int {
@@ -63,12 +66,16 @@ func printText(results []checker.RunResult) int {
 	total := 0
 	passed := 0
 	warnings := 0
+	infos := 0
 
 	for _, r := range results {
 		fmt.Fprintf(os.Stdout, "\n%s=== %s ===%s\n", colorCyan, r.Domain, colorReset)
 		for _, res := range r.Results {
 			var status string
-			if res.Warning {
+			if res.Info {
+				status = colorWhite + "INFO" + colorReset
+				infos++
+			} else if res.Warning {
 				status = colorYellow + "WARN" + colorReset
 				warnings++
 			} else {
@@ -100,6 +107,9 @@ func printText(results []checker.RunResult) int {
 	if warnings > 0 {
 		fmt.Fprintf(os.Stdout, "%s%d warning(s)%s\n", colorYellow, warnings, colorReset)
 	}
+	if infos > 0 {
+		fmt.Fprintf(os.Stdout, "%s%d info(s)%s\n", colorWhite, infos, colorReset)
+	}
 
 	if passed < total {
 		return 1
@@ -112,11 +122,14 @@ func printJSON(results []checker.RunResult) int {
 	total := 0
 	passed := 0
 	warnings := 0
+	infos := 0
 
 	for _, r := range results {
 		domain := JSONDomain{Name: r.Domain}
 		for _, res := range r.Results {
-			if res.Warning {
+			if res.Info {
+				infos++
+			} else if res.Warning {
 				warnings++
 			} else {
 				total++
@@ -128,6 +141,7 @@ func printJSON(results []checker.RunResult) int {
 				Checker:     res.Checker,
 				Passed:      res.Passed,
 				Warning:     res.Warning,
+				Info:        res.Info,
 				Details:     res.Details,
 				HTTPVersion: res.HTTPVersion,
 				AltSvc:      res.AltSvc,
@@ -149,6 +163,7 @@ func printJSON(results []checker.RunResult) int {
 		Passed:   passed,
 		Failed:   total - passed,
 		Warnings: warnings,
+		Info:     infos,
 	}
 
 	data, _ := json.MarshalIndent(report, "", "  ")
@@ -166,7 +181,9 @@ func FormatText(results []checker.RunResult) string {
 		b.WriteString(fmt.Sprintf("\n=== %s ===\n", r.Domain))
 		for _, res := range r.Results {
 			status := "PASS"
-			if res.Warning {
+			if res.Info {
+				status = "INFO"
+			} else if res.Warning {
 				status = "WARN"
 			} else if !res.Passed {
 				status = "FAIL"

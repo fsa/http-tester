@@ -66,14 +66,14 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpMode string, enableHTT
 		}
 	}
 
-	// Warning: if HTTP/3 supported but no HTTPS DNS check
+	// Info: if HTTP/3 supported but no HTTPS DNS check
 	if enableHTTPS && strings.Contains(altSvc, "h3") && !hasHTTPSCheck {
 		results = append(results, &checker.Result{
-			Checker: "dns-https-warn",
+			Checker: "dns-https-info",
 			Domain:  domain,
 			Passed:  true,
-			Warning: true,
-			Details: "HTTP/3 supported but no HTTPS DNS record check — consider adding https: yes",
+			Info:    true,
+			Details: "HTTP/3 supported but no HTTPS DNS record — consider adding https: yes",
 		})
 	}
 
