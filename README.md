@@ -32,11 +32,13 @@
 ./http-tester [опции] <конфиг.yaml>
 ```
 
+Порядок аргументов произвольный — конфиг и флаги можно располагать как удобно.
+
 ### Опции
 
 | Опция | Описание |
 |-------|----------|
-| `-resolver <адрес>` | DNS резолвер (например `8.8.8.8:53`) |
+| `-resolver <адрес>` | DNS резолвер. Если порт не указан, используется 53 |
 | `-format <формат>` | Формат вывода: `text` (по умолчанию) или `json` |
 
 ### Примеры
@@ -45,11 +47,18 @@
 # Базовый запуск
 ./http-tester config.yaml
 
-# С кастомным резолвером
-./http-tester -resolver 8.8.8.8:53 config.yaml
+# С кастомным резолвером (порт 53 по умолчанию)
+./http-tester -resolver 8.8.8.8 config.yaml
 
-# Вывод в JSON
-./http-tester -format json config.yaml
+# С кастомным резолвером и явным портом
+./http-tester -resolver 8.8.8.8:5353 config.yaml
+
+# IPv6 резолвер (в квадратных скобках)
+./http-tester -resolver [2001:4860:4860::8888] config.yaml
+
+# Порядок аргументов произвольный
+./http-tester config.yaml -format json
+./http-tester -format json -resolver 1.1.1.1 config.yaml
 ```
 
 ## Формат конфигурации
