@@ -149,16 +149,29 @@ dns.https = maybe:
 
 **Результат:** `https-http3-ipv4`, `https-http3-ipv6`
 
-### 2.4. Предупреждение о HTTPS DNS записи
+### 2.4. Предупреждения и информация
 
-**Когда:** `web.https = true` И обнаружен HTTP/3 И `dns.https` не задан
+#### INFO: Нет HTTPS DNS записи
 
-**Действие:** Выводим предупреждение (WARN):
+**Когда:** `web.https = true` И обнаружен HTTP/3 И HTTPS DNS запись не задана в конфиге
+
+**Действие:** Выводим INFO:
 ```
-HTTP/3 supported but no HTTPS DNS record check — consider adding https: yes
+HTTP/3 supported but no HTTPS DNS record — consider adding https: yes
 ```
 
 Не влияет на exit code.
+
+#### WARN: Нет Alt-Svc при наличии HTTPS записи
+
+**Когда:** `web.https = true` И HTTPS DNS запись существует И сервер не отдаёт Alt-Svc
+
+**Действие:** Выводим WARN и считаем это ошибкой:
+```
+HTTPS DNS record exists but server does not advertise Alt-Svc header
+```
+
+**Влияет на exit code** (считается как FAIL).
 
 ---
 
@@ -182,15 +195,16 @@ HTTP/3 supported but no HTTPS DNS record check — consider adding https: yes
 4. http-ipv4 / http-ipv6
 5. https-http2-ipv4 / https-http2-ipv6
 6. https-http3-ipv4 / https-http3-ipv6
-7. dns-https-warn (если применимо)
+7. dns-https-info (если применимо)
+8. http-alt-svc-warn (если применимо)
 
 ---
 
 ## 5. Exit code
 
 - `0` — все проверки PASS
-- `1` — хотя бы одна проверка FAIL
-- WARN не влияет на exit code
+- `1` — хотя бы одна проверка FAIL или WARN
+- INFO не влияет на exit code
 
 ---
 
@@ -217,3 +231,5 @@ web:
 7. https-http2-ipv6 (порт 443 → 200) — если AAAA есть
 8. https-http3-ipv4 (если Alt-Svc: h3)
 9. https-http3-ipv6 (если Alt-Svc: h3) — если AAAA есть
+10. dns-https-info (если HTTP/3 есть, но dns.https не задан)
+11. http-alt-svc-warn (если HTTPS запись есть, но Alt-Svc нет)

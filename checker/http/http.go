@@ -20,10 +20,11 @@ import (
 // - Port 80: HTTP/1.1, expect redirect (301/302) or direct (200) based on mode
 // - Port 443: HTTP/2, expect 200 (only if enableHTTPS is true)
 // - HTTP/3: only if Alt-Svc h3 detected in HTTP/2 response (only if enableHTTPS is true)
-// hasHTTPSCheck indicates if HTTPS DNS record is being checked
+// hasHTTPSCheck: dns.https config is set (yes/no/maybe)
+// httpsRecordExists: HTTPS DNS record actually exists in DNS
 // httpMode: "redirect" (default) or "direct" for port 80 behavior
 // enableHTTPS: whether to check HTTPS on port 443
-func RunAutoChecks(domain string, hasHTTPSCheck bool, httpMode string, enableHTTPS bool) []*checker.Result {
+func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, httpMode string, enableHTTPS bool) []*checker.Result {
 	var results []*checker.Result
 
 	ipv4, ipv6 := resolveBoth(domain)
@@ -66,7 +67,7 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpMode string, enableHTT
 		}
 	}
 
-	// Info: if HTTP/3 supported but no HTTPS DNS check
+	// Info: if HTTP/3 supported but no HTTPS DNS check configured
 	if enableHTTPS && strings.Contains(altSvc, "h3") && !hasHTTPSCheck {
 		results = append(results, &checker.Result{
 			Checker: "dns-https-info",
@@ -74,6 +75,17 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpMode string, enableHTT
 			Passed:  true,
 			Info:    true,
 			Details: "HTTP/3 supported but no HTTPS DNS record — consider adding https: yes",
+		})
+	}
+
+	// Warn: if HTTPS DNS record exists but server doesn't advertise Alt-Svc
+	if enableHTTPS && httpsRecordExists && altSvc == "" {
+		results = append(results, &checker.Result{
+			Checker: "http-alt-svc-warn",
+			Domain:  domain,
+			Passed:  false,
+			Warning: true,
+			Details: "HTTPS DNS record exists but server does not advertise Alt-Svc header",
 		})
 	}
 

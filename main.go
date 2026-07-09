@@ -74,6 +74,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, webChecks *config.Web
 	rr := checker.RunResult{Domain: domain}
 
 	var dnsResult *dns.DNSResult
+	httpsRecordExists := false
 
 	// Run DNS checks
 	if dnsChecks != nil {
@@ -107,6 +108,14 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, webChecks *config.Web
 					Details: fmt.Sprintf("error: %v", err),
 				}}
 			} else {
+				// Check if HTTPS records were found
+				for _, r := range results {
+					if len(r.Records) > 0 {
+						httpsRecordExists = true
+						break
+					}
+				}
+
 				if dnsChecks.HTTPS == config.DNSNo {
 					for _, r := range results {
 						if r.Passed && len(r.Records) > 0 {
@@ -173,7 +182,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, webChecks *config.Web
 		if httpMode == "" {
 			httpMode = "redirect"
 		}
-		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpMode, webChecks.HTTPS)
+		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, httpMode, webChecks.HTTPS)
 
 		if dnsResult != nil {
 			var filtered []*checker.Result
