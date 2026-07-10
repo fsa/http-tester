@@ -163,8 +163,6 @@ All 9 check(s) passed
 1 warning(s)
 ```
 
-*Примечание: в терминале заголовки `Started:`, `Testing:`, `Resolver:` и `=== ... ===` отображаются cyan-цветом.*
-
 ## Сборка
 
 ```bash
