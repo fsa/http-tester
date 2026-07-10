@@ -3,6 +3,7 @@ package report
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"http-tester/checker"
 )
@@ -28,7 +29,7 @@ func TestPrintText(t *testing.T) {
 		},
 	}
 
-	exitCode := Print(results, "text")
+	exitCode := Print(results, "8.8.8.8:53", time.Now(), "text")
 	if exitCode != 1 {
 		t.Errorf("exitCode = %d, want 1 (has failures)", exitCode)
 	}
@@ -53,13 +54,13 @@ func TestPrintJSON(t *testing.T) {
 	}
 
 	// Test compact JSON
-	exitCode := Print(results, "json")
+	exitCode := Print(results, "8.8.8.8:53", time.Now(), "json")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
 
 	// Test pretty JSON
-	exitCode = Print(results, "json-pretty")
+	exitCode = Print(results, "8.8.8.8:53", time.Now(), "json-pretty")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
@@ -97,7 +98,7 @@ func TestPrintJSON_Structure(t *testing.T) {
 		},
 	}
 
-	report := buildReport(results)
+	report := buildReport(results, "8.8.8.8:53", time.Now())
 
 	if report.Summary.Total != 1 {
 		t.Errorf("Total = %d, want 1", report.Summary.Total)
@@ -148,7 +149,7 @@ func TestPrintYAML(t *testing.T) {
 		},
 	}
 
-	exitCode := Print(results, "yaml")
+	exitCode := Print(results, "8.8.8.8:53", time.Now(), "yaml")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
