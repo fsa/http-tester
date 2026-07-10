@@ -403,7 +403,7 @@ func CheckConsistency(results []*checker.Result) []*checker.Result {
 	}
 	var entries []entry
 	for _, r := range results {
-		if r.Passed && r.Body != nil && len(r.Body) > 0 {
+		if r.Passed && r.Body != nil && len(r.Body) > 1024 { // skip small responses (under 1KB)
 			entries = append(entries, entry{checker: r.Checker, body: r.Body})
 		}
 	}
@@ -433,7 +433,9 @@ func CheckConsistency(results []*checker.Result) []*checker.Result {
 			}
 
 			// Warn if similarity is low or size differs significantly
-			if similarity < 0.85 || sizeRatio > 1.5 {
+			// Thresholds are intentionally relaxed to avoid false positives
+			// from sites with A/B testing, localization, or minor content variations
+			if similarity < 0.60 || sizeRatio > 3.0 {
 				warnings = append(warnings, &checker.Result{
 					Checker: "consistency",
 					Domain:  entries[i].checker,
