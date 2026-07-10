@@ -23,6 +23,12 @@
 - Проверка Alt-Svc заголовков vs HTTPS DNS записи
 - Выявление рассинхронизации между конфигурациями
 
+### 📊 Согласованность ответов
+
+- **Содержимое**: сравнение контента страниц по разным протоколам (IPv4/IPv6, HTTP/HTTPS, HTTP/2/HTTP/3)
+- **Статусы**: проверка что все HTTP-ответы возвращают одинаковый статус, и все HTTPS-ответы возвращают одинаковый статус
+- Устойчивость к A/B тестированию и локализации
+
 ### 📡 Дополнительно
 
 - Проверка A/AAAA записей с режимами yes/no/maybe
@@ -149,9 +155,12 @@ Resolver: 1.1.1.1:53
   [PASS] https-http2-ipv6: https://example.com/ -> 200 OK
   [PASS] https-http3-ipv4: https://example.com/ -> 200 OK
   [PASS] https-http3-ipv6: https://example.com/ -> 200 OK
+  [WARN] http-status-consistency: inconsistent HTTP responses: 200 (http-ipv4) vs 301 (http-ipv6)
+  [WARN] consistency: different content detected between https-http2-ipv4 and https-http3-ipv4 (word overlap: 55%, size ratio: 1.2x)
 
 --- Summary ---
 All 9 check(s) passed
+1 warning(s)
 ```
 
 *Примечание: в терминале заголовки `Started:`, `Testing:`, `Resolver:` и `=== ... ===` отображаются cyan-цветом.*
