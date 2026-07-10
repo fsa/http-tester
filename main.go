@@ -17,11 +17,14 @@ import (
 	"golang.org/x/text/language"
 )
 
+var version = "dev"
+
 func main() {
 	resolver := flag.StringP("resolver", "r", "", "DNS resolver address (e.g. 8.8.8.8 or 2001:4860:4860::8888)")
 	port := flag.StringP("port", "p", "53", "DNS resolver port")
 	format := flag.StringP("format", "f", "text", "output format: text, json, json-pretty, yaml")
 	configFile := flag.StringP("config", "c", "", "config file path")
+	showVersion := flag.BoolP("version", "V", false, "print version and exit")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] <domain>\n", os.Args[0])
@@ -31,6 +34,11 @@ func main() {
 	}
 
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("http-tester %s\n", version)
+		os.Exit(0)
+	}
 
 	var cfg *config.DomainConfig
 
