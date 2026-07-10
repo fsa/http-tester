@@ -121,6 +121,10 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 	consistencyWarnings := CheckConsistency(results)
 	results = append(results, consistencyWarnings...)
 
+	// Check status code consistency across protocols
+	statusWarnings := CheckStatusConsistency(results)
+	results = append(results, statusWarnings...)
+
 	if len(results) == 0 {
 		results = append(results, &checker.Result{
 			Checker: "http",
@@ -443,4 +447,75 @@ func CheckConsistency(results []*checker.Result) []*checker.Result {
 	}
 
 	return warnings
+}
+
+// CheckStatusConsistency checks if all HTTP responses have consistent status types
+// (all 200 OK, or all same redirect type). Warns if different users may get different results.
+func CheckStatusConsistency(results []*checker.Result) []*checker.Result {
+	// Collect HTTP check results (exclude DNS and other non-HTTP checks)
+	type statusEntry struct {
+		checker string
+		status  string
+	}
+	statuses := make(map[string][]string) // status -> list of checkers
+	for _, r := range results {
+		if !isHTTPCheck(r.Checker) || !r.Passed {
+			continue
+		}
+		status := parseStatusType(r.Details)
+		if status != "" {
+			statuses[status] = append(statuses[status], r.Checker)
+		}
+	}
+
+	// Need at least 2 different status types to warn
+	if len(statuses) <= 1 {
+		return nil
+	}
+
+	// Build warning message
+	var parts []string
+	for status, checkers := range statuses {
+		parts = append(parts, fmt.Sprintf("%s (%s)", status, strings.Join(checkers, ", ")))
+	}
+
+	return []*checker.Result{{
+		Checker: "status-consistency",
+		Domain:  "",
+		Passed:  false,
+		Warning: true,
+		Details: fmt.Sprintf("inconsistent responses detected: %s — different users may get different results depending on their protocol and provider",
+			strings.Join(parts, " vs ")),
+	}}
+}
+
+// isHTTPCheck returns true if the checker name is an HTTP check
+func isHTTPCheck(name string) bool {
+	return strings.HasPrefix(name, "http") && !strings.HasPrefix(name, "dns")
+}
+
+// parseStatusType extracts a normalized status type from Details string
+// e.g. "http-ipv4 http://example.com/ -> 200 OK" returns "200"
+func parseStatusType(details string) string {
+	// Find "-> XXX " pattern
+	idx := strings.Index(details, "-> ")
+	if idx < 0 {
+		return ""
+	}
+	statusStr := details[idx+4:]
+	// Extract status code (first 3 digits)
+	if len(statusStr) < 3 {
+		return ""
+	}
+	code := statusStr[:3]
+	switch code {
+	case "200":
+		return "200"
+	case "301":
+		return "301"
+	case "302":
+		return "302"
+	default:
+		return code
+	}
 }
