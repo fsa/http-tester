@@ -15,10 +15,17 @@ func normalizeResolver(addr string) string {
 	if addr == "" {
 		return ""
 	}
-	if !strings.Contains(addr, ":") {
-		return addr + ":53"
+	// Already has port specified
+	host, _, err := net.SplitHostPort(addr)
+	if err == nil && host != "" {
+		return addr
 	}
-	return addr
+	// IPv6 address without port — JoinHostPort wraps it in brackets
+	if strings.Contains(addr, ":") {
+		return net.JoinHostPort(addr, "53")
+	}
+	// IPv4 or hostname without port
+	return addr + ":53"
 }
 
 type DNSResult struct {
