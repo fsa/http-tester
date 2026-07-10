@@ -134,14 +134,6 @@ func main() {
 		printPlan(cfg)
 	}
 
-	// Output connectivity info
-	if !localIPv4 {
-		fmt.Fprintf(os.Stderr, "\033[33m[INFO]\033[0m IPv4 not available on this host — skipping IPv4 tests\n")
-	}
-	if !localIPv6 {
-		fmt.Fprintf(os.Stderr, "\033[33m[INFO]\033[0m IPv6 not available on this host — skipping IPv6 tests\n")
-	}
-
 	var allResults []checker.RunResult
 
 	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6)

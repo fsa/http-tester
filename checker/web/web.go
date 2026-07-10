@@ -29,11 +29,25 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 
 	ipv4, ipv6 := resolveBoth(domain)
 
-	// Filter by local connectivity (checked once at startup in main)
+	// Check local connectivity and add INFO to this domain's results
 	if ipv4 != "" && !localIPv4 {
+		results = append(results, &checker.Result{
+			Checker: "web-info",
+			Domain:  domain,
+			Passed:  true,
+			Info:    true,
+			Details: "IPv4 not available on this host — skipping IPv4 tests",
+		})
 		ipv4 = ""
 	}
 	if ipv6 != "" && !localIPv6 {
+		results = append(results, &checker.Result{
+			Checker: "web-info",
+			Domain:  domain,
+			Passed:  true,
+			Info:    true,
+			Details: "IPv6 not available on this host — skipping IPv6 tests",
+		})
 		ipv6 = ""
 	}
 
