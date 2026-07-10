@@ -131,6 +131,12 @@ aliases:
 ## Пример вывода
 
 ```
+Started: 10.07.2026 14:04:44 +05
+
+Testing: example.com
+  DNS: A(yes), AAAA(yes), HTTPS(yes)
+  Web: HTTP(any), HTTPS(any)
+
 Resolver: 1.1.1.1:53
 
 === example.com ===

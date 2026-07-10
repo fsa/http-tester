@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
@@ -68,8 +69,11 @@ func main() {
 		resolverAddr = net.JoinHostPort(host, *port)
 	}
 
+	startTime := time.Now()
+
 	// Print plan (only in text mode)
 	if *format == "text" || *format == "" {
+		fmt.Fprintf(os.Stderr, "\nStarted: %s\n", startTime.Format("02.01.2006 15:04:05 MST"))
 		printPlan(cfg)
 	}
 
@@ -83,7 +87,7 @@ func main() {
 		allResults = append(allResults, arr)
 	}
 
-	exitCode := report.Print(allResults, resolverAddr, *format)
+	exitCode := report.Print(allResults, resolverAddr, startTime, *format)
 	os.Exit(exitCode)
 }
 
