@@ -4,11 +4,22 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"http-tester/checker"
 	"http-tester/config"
 )
+
+func normalizeResolver(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	if !strings.Contains(addr, ":") {
+		return addr + ":53"
+	}
+	return addr
+}
 
 type DNSResult struct {
 	HasA    bool
@@ -26,9 +37,10 @@ func New(resolverAddr string) *DNSChecker {
 		PreferGo: true,
 	}
 	if resolverAddr != "" {
+		addr := normalizeResolver(resolverAddr)
 		r.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
 			d := net.Dialer{Timeout: 5 * time.Second}
-			return d.DialContext(ctx, "udp", resolverAddr)
+			return d.DialContext(ctx, "udp", addr)
 		}
 	}
 	return &DNSChecker{Resolver: r}
