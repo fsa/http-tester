@@ -24,33 +24,16 @@ const maxBodySize = 512 * 1024 // 512 KB max body size for consistency check
 // - Port 80: HTTP/1.1 with httpMode
 // - Port 443: HTTP/2 with httpsMode (only if httpsMode != "no")
 // - HTTP/3: only if Alt-Svc h3 detected and httpsMode != "no"
-func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string) []*checker.Result {
+func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string, localIPv4, localIPv6 bool) []*checker.Result {
 	var results []*checker.Result
 
 	ipv4, ipv6 := resolveBoth(domain)
 
-	// Check local IPv4/IPv6 connectivity
-	localIPv4, localIPv6 := checkLocalConnectivity()
-
-	// Add INFO messages if testing is not possible
+	// Filter by local connectivity (checked once at startup in main)
 	if ipv4 != "" && !localIPv4 {
-		results = append(results, &checker.Result{
-			Checker: "web-info",
-			Domain:  domain,
-			Passed:  true,
-			Info:    true,
-			Details: "IPv4 not available on this host — skipping IPv4 tests",
-		})
 		ipv4 = ""
 	}
 	if ipv6 != "" && !localIPv6 {
-		results = append(results, &checker.Result{
-			Checker: "web-info",
-			Domain:  domain,
-			Passed:  true,
-			Info:    true,
-			Details: "IPv6 not available on this host — skipping IPv6 tests",
-		})
 		ipv6 = ""
 	}
 
@@ -323,37 +306,6 @@ func resolveBoth(domain string) (ipv4, ipv6 string) {
 		}
 	}
 	return ipv4, ipv6
-}
-
-// checkLocalConnectivity checks if the machine has IPv4 and IPv6 network interfaces
-func checkLocalConnectivity() (hasIPv4, hasIPv6 bool) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return false, false
-	}
-
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrs {
-			ip, _, err := net.ParseCIDR(addr.String())
-			if err != nil {
-				continue
-			}
-			if ip.To4() != nil {
-				hasIPv4 = true
-			} else if ip.To16() != nil {
-				hasIPv6 = true
-			}
-		}
-	}
-
-	return hasIPv4, hasIPv6
 }
 
 // wordFreq builds a frequency map of words from input bytes

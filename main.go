@@ -109,6 +109,17 @@ func main() {
 		resolverAddr = net.JoinHostPort(host, *port)
 	}
 
+	// Check local IPv4/IPv6 connectivity before any tests
+	localIPv4, localIPv6 := checkLocalConnectivity()
+
+	// Check resolver reachability if explicitly specified
+	if resolverAddr != "" {
+		if !probeUDP(resolverAddr) {
+			fmt.Fprintf(os.Stderr, "\n\033[31mError:\033[0m specified resolver %s is not reachable\n", resolverAddr)
+			os.Exit(1)
+		}
+	}
+
 	startTime := time.Now()
 
 	// Print plan (only in text mode)
@@ -123,13 +134,21 @@ func main() {
 		printPlan(cfg)
 	}
 
+	// Output connectivity info
+	if !localIPv4 {
+		fmt.Fprintf(os.Stderr, "\033[33m[INFO]\033[0m IPv4 not available on this host — skipping IPv4 tests\n")
+	}
+	if !localIPv6 {
+		fmt.Fprintf(os.Stderr, "\033[33m[INFO]\033[0m IPv6 not available on this host — skipping IPv6 tests\n")
+	}
+
 	var allResults []checker.RunResult
 
-	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr)
+	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6)
 	allResults = append(allResults, rr)
 
 	for _, alias := range cfg.Aliases {
-		arr := runDomain(alias.Name, alias.DNS, alias.HasDNS, alias.Web, alias.HasWeb, resolverAddr)
+		arr := runDomain(alias.Name, alias.DNS, alias.HasDNS, alias.Web, alias.HasWeb, resolverAddr, localIPv4, localIPv6)
 		allResults = append(allResults, arr)
 	}
 
@@ -209,7 +228,7 @@ func printPlan(cfg *config.DomainConfig) {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string) checker.RunResult {
+func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string, localIPv4, localIPv6 bool) checker.RunResult {
 	rr := checker.RunResult{Domain: domain}
 
 	resolver := dns.NewResolver(resolverAddr)
@@ -334,7 +353,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 				httpsMode = string(webChecks.HTTPS)
 			}
 		}
-		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode)
+		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, localIPv4, localIPv6)
 
 		if dnsResult != nil {
 			var filtered []*checker.Result
@@ -367,4 +386,41 @@ func containsStr(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func checkLocalConnectivity() (hasIPv4, hasIPv6 bool) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return false, false
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ip, _, err := net.ParseCIDR(addr.String())
+			if err != nil {
+				continue
+			}
+			if ip.To4() != nil {
+				hasIPv4 = true
+			} else if ip.To16() != nil {
+				hasIPv6 = true
+			}
+		}
+	}
+	return hasIPv4, hasIPv6
+}
+
+func probeUDP(addr string) bool {
+	conn, err := net.DialTimeout("udp", addr, 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
