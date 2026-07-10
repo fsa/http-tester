@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -18,6 +19,36 @@ import (
 )
 
 var version = "dev"
+
+func printVersion() {
+	fmt.Printf("http-tester %s\n", version)
+
+	if version != "dev" {
+		return
+	}
+
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			commit := setting.Value
+			if len(commit) > 12 {
+				commit = commit[:12]
+			}
+			fmt.Printf("commit: %s\n", commit)
+		case "vcs.time":
+			fmt.Printf("commit time: %s\n", setting.Value)
+		case "vcs.modified":
+			if setting.Value == "true" {
+				fmt.Println("modified: true (uncommitted changes)")
+			}
+		}
+	}
+}
 
 func main() {
 	resolver := flag.StringP("resolver", "r", "", "DNS resolver address (e.g. 8.8.8.8 or 2001:4860:4860::8888)")
@@ -36,7 +67,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("http-tester %s\n", version)
+		printVersion()
 		os.Exit(0)
 	}
 

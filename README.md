@@ -170,19 +170,14 @@ All 9 check(s) passed
 ## Сборка
 
 ```bash
-# Локальная сборка (версия: dev)
+# Локальная сборка (dev версия с информацией о коммите)
 go build -o http-tester .
 
-# Сборка с указанием версии
+# Сборка релизной версии
 go build -ldflags "-X main.version=v1.0" -o http-tester .
 ```
 
-При сборке через CI/CD версия автоматически берётся из git-тега:
-
-```bash
-VERSION=$(git describe --tags --always)
-go build -ldflags "-X main.version=$VERSION" -o http-tester .
-```
+Dev-сборка автоматически определяет коммит, дату и наличие несохранённых изменений через `debug.ReadBuildInfo()`.
 
 ## Зависимости
 
