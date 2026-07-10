@@ -19,8 +19,6 @@ type HTTPSChecker struct {
 func NewHTTPSChecker(server string) *HTTPSChecker {
 	if server == "" {
 		server = "8.8.8.8:53"
-	} else {
-		server = normalizeResolver(server)
 	}
 	return &HTTPSChecker{Server: server}
 }
@@ -141,8 +139,6 @@ func parseHTTPSRecord(h *mdns.HTTPS) HTTPSRecordInfo {
 func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 	if server == "" {
 		server = "8.8.8.8:53"
-	} else {
-		server = normalizeResolver(server)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -343,10 +339,9 @@ func resolveIPs(ctx context.Context, domain, server string) (ipv4s, ipv6s []stri
 		PreferGo: true,
 	}
 	if server != "" {
-		addr := normalizeResolver(server)
 		r.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
 			d := net.Dialer{Timeout: 5 * time.Second}
-			return d.DialContext(ctx, "udp", addr)
+			return d.DialContext(ctx, "udp", server)
 		}
 	}
 
@@ -381,8 +376,6 @@ func hasOverlap(a, b []string) bool {
 func HasHTTPSRecord(domain string, server string) bool {
 	if server == "" {
 		server = "8.8.8.8:53"
-	} else {
-		server = normalizeResolver(server)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

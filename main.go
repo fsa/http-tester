@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -15,7 +16,8 @@ import (
 )
 
 func main() {
-	resolver := flag.StringP("resolver", "r", "", "DNS resolver address (e.g. 8.8.8.8:53)")
+	resolver := flag.StringP("resolver", "r", "", "DNS resolver address (e.g. 8.8.8.8 or 2001:4860:4860::8888)")
+	port := flag.StringP("port", "p", "53", "DNS resolver port")
 	format := flag.StringP("format", "f", "text", "output format: text, json, json-pretty, yaml")
 	configFile := flag.StringP("config", "c", "", "config file path")
 
@@ -59,6 +61,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Build resolver address from host + port
+	var resolverAddr string
+	if *resolver != "" {
+		host := strings.Trim(*resolver, "[]")
+		resolverAddr = net.JoinHostPort(host, *port)
+	}
+
 	// Print plan (only in text mode)
 	if *format == "text" || *format == "" {
 		printPlan(cfg)
@@ -66,11 +75,11 @@ func main() {
 
 	var allResults []checker.RunResult
 
-	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, *resolver)
+	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr)
 	allResults = append(allResults, rr)
 
 	for _, alias := range cfg.Aliases {
-		arr := runDomain(alias.Name, alias.DNS, alias.HasDNS, alias.Web, alias.HasWeb, *resolver)
+		arr := runDomain(alias.Name, alias.DNS, alias.HasDNS, alias.Web, alias.HasWeb, resolverAddr)
 		allResults = append(allResults, arr)
 	}
 

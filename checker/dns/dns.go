@@ -4,29 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"http-tester/checker"
 	"http-tester/config"
 )
-
-func normalizeResolver(addr string) string {
-	if addr == "" {
-		return ""
-	}
-	// Already has port specified
-	host, _, err := net.SplitHostPort(addr)
-	if err == nil && host != "" {
-		return addr
-	}
-	// IPv6 address without port — JoinHostPort wraps it in brackets
-	if strings.Contains(addr, ":") {
-		return net.JoinHostPort(addr, "53")
-	}
-	// IPv4 or hostname without port
-	return addr + ":53"
-}
 
 type DNSResult struct {
 	HasA    bool
@@ -44,10 +26,9 @@ func New(resolverAddr string) *DNSChecker {
 		PreferGo: true,
 	}
 	if resolverAddr != "" {
-		addr := normalizeResolver(resolverAddr)
 		r.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
 			d := net.Dialer{Timeout: 5 * time.Second}
-			return d.DialContext(ctx, "udp", addr)
+			return d.DialContext(ctx, "udp", resolverAddr)
 		}
 	}
 	return &DNSChecker{Resolver: r}
