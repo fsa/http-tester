@@ -3,7 +3,6 @@ package dns
 import (
 	"context"
 	"fmt"
-	"net"
 	"time"
 
 	"http-tester/checker"
@@ -16,22 +15,13 @@ type DNSResult struct {
 }
 
 type DNSChecker struct {
-	Resolver *net.Resolver
+	resolver *Resolver
 	A        config.DNSRecordCheck
 	AAAA     config.DNSRecordCheck
 }
 
-func New(resolverAddr string) *DNSChecker {
-	r := &net.Resolver{
-		PreferGo: true,
-	}
-	if resolverAddr != "" {
-		r.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{Timeout: 5 * time.Second}
-			return d.DialContext(ctx, "udp", resolverAddr)
-		}
-	}
-	return &DNSChecker{Resolver: r}
+func New(resolver *Resolver) *DNSChecker {
+	return &DNSChecker{resolver: resolver}
 }
 
 func (c *DNSChecker) Name() string {
@@ -50,7 +40,7 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 
 	dnsResult := &DNSResult{}
 
-	addrs, err := c.Resolver.LookupIPAddr(ctx, domain)
+	addrs, err := c.resolver.LookupIPAddr(ctx, domain)
 	if err != nil {
 		result.Passed = false
 		result.Details = fmt.Sprintf("resolution failed: %v", err)

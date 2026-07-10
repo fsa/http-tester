@@ -209,8 +209,10 @@ func printPlan(cfg *config.DomainConfig) {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolver string) checker.RunResult {
+func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string) checker.RunResult {
 	rr := checker.RunResult{Domain: domain}
+
+	resolver := dns.NewResolver(resolverAddr)
 
 	var dnsResult *dns.DNSResult
 	httpsRecordExists := false

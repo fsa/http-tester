@@ -3,7 +3,6 @@ package dns
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -13,14 +12,11 @@ import (
 )
 
 type HTTPSChecker struct {
-	Server string // "8.8.8.8:53" etc
+	resolver *Resolver
 }
 
-func NewHTTPSChecker(server string) *HTTPSChecker {
-	if server == "" {
-		server = "8.8.8.8:53"
-	}
-	return &HTTPSChecker{Server: server}
+func NewHTTPSChecker(resolver *Resolver) *HTTPSChecker {
+	return &HTTPSChecker{resolver: resolver}
 }
 
 func (c *HTTPSChecker) Name() string {
@@ -37,12 +33,7 @@ func (c *HTTPSChecker) Check(domain string) ([]*checker.Result, error) {
 		Passed:  true,
 	}
 
-	m := new(mdns.Msg)
-	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
-	m.RecursionDesired = true
-
-	client := new(mdns.Client)
-	resp, _, err := client.ExchangeContext(ctx, m, c.Server)
+	resp, err := c.resolver.LookupHTTPS(ctx, domain)
 	if err != nil {
 		result.Passed = false
 		result.Details = fmt.Sprintf("HTTPS lookup failed: %v", err)
@@ -136,11 +127,7 @@ func parseHTTPSRecord(h *mdns.HTTPS) HTTPSRecordInfo {
 }
 
 // ConsistencyCheck performs comprehensive HTTPS record validation per RFC 9460
-func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
-	if server == "" {
-		server = "8.8.8.8:53"
-	}
-
+func ConsistencyCheck(domain string, resolver *Resolver) ([]*checker.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -151,7 +138,7 @@ func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 	}
 
 	// 1. Resolve A/AAAA for the domain
-	a4s, a6s, err := resolveIPs(ctx, domain, server)
+	a4s, a6s, err := resolveIPs(ctx, resolver, domain)
 	if err != nil {
 		result.Passed = false
 		result.Details = fmt.Sprintf("base resolution failed: %v", err)
@@ -164,11 +151,7 @@ func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 	}
 
 	// 2. Fetch HTTPS records
-	m := new(mdns.Msg)
-	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
-	m.RecursionDesired = true
-	client := new(mdns.Client)
-	resp, _, err := client.ExchangeContext(ctx, m, server)
+	resp, err := resolver.LookupHTTPS(ctx, domain)
 	if err != nil {
 		result.Passed = false
 		result.Details = fmt.Sprintf("HTTPS lookup failed: %v", err)
@@ -205,10 +188,10 @@ func ConsistencyCheck(domain string, server string) ([]*checker.Result, error) {
 		}
 
 		if rec.IsAliasMode {
-			rr := analyzeAliasMode(domain, &rec, server, ctx)
+			rr := analyzeAliasMode(domain, &rec, resolver, ctx)
 			applyResult(recResult, fmt.Sprintf("record #%d (AliasMode, priority=%d)", i+1, rec.Priority), rr)
 		} else {
-			rr := analyzeServiceMode(domain, &rec, a4s, a6s, server, ctx)
+			rr := analyzeServiceMode(domain, &rec, a4s, a6s)
 			applyResult(recResult, fmt.Sprintf("record #%d (ServiceMode, priority=%d)", i+1, rec.Priority), rr)
 		}
 
@@ -239,7 +222,7 @@ type analyzeResult struct {
 }
 
 // analyzeAliasMode checks a Priority=0 HTTPS record
-func analyzeAliasMode(domain string, rec *HTTPSRecordInfo, server string, ctx context.Context) analyzeResult {
+func analyzeAliasMode(domain string, rec *HTTPSRecordInfo, resolver *Resolver, ctx context.Context) analyzeResult {
 	r := analyzeResult{}
 
 	// Target must be a valid domain, not '.'
@@ -256,7 +239,7 @@ func analyzeAliasMode(domain string, rec *HTTPSRecordInfo, server string, ctx co
 	}
 
 	// Follow: query HTTPS record for the Target domain
-	targetRecords := queryHTTPS(ctx, rec.Target, server)
+	targetRecords := queryHTTPS(ctx, resolver, rec.Target)
 	if len(targetRecords) == 0 {
 		r.warnings = append(r.warnings, fmt.Sprintf("target %s has no HTTPS records", rec.Target))
 	} else {
@@ -267,7 +250,7 @@ func analyzeAliasMode(domain string, rec *HTTPSRecordInfo, server string, ctx co
 }
 
 // analyzeServiceMode checks a Priority>0 HTTPS record
-func analyzeServiceMode(domain string, rec *HTTPSRecordInfo, a4s, a6s []string, server string, ctx context.Context) analyzeResult {
+func analyzeServiceMode(domain string, rec *HTTPSRecordInfo, a4s, a6s []string) analyzeResult {
 	r := analyzeResult{}
 
 	// Target
@@ -314,13 +297,8 @@ func analyzeServiceMode(domain string, rec *HTTPSRecordInfo, a4s, a6s []string, 
 }
 
 // queryHTTPS fetches HTTPS records for a domain (used for AliasMode following)
-func queryHTTPS(ctx context.Context, domain, server string) []*mdns.HTTPS {
-	m := new(mdns.Msg)
-	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
-	m.RecursionDesired = true
-
-	client := new(mdns.Client)
-	resp, _, err := client.ExchangeContext(ctx, m, server)
+func queryHTTPS(ctx context.Context, resolver *Resolver, domain string) []*mdns.HTTPS {
+	resp, err := resolver.LookupHTTPS(ctx, domain)
 	if err != nil {
 		return nil
 	}
@@ -334,18 +312,8 @@ func queryHTTPS(ctx context.Context, domain, server string) []*mdns.HTTPS {
 	return records
 }
 
-func resolveIPs(ctx context.Context, domain, server string) (ipv4s, ipv6s []string, err error) {
-	r := &net.Resolver{
-		PreferGo: true,
-	}
-	if server != "" {
-		r.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{Timeout: 5 * time.Second}
-			return d.DialContext(ctx, "udp", server)
-		}
-	}
-
-	addrs, err := r.LookupIPAddr(ctx, domain)
+func resolveIPs(ctx context.Context, resolver *Resolver, domain string) (ipv4s, ipv6s []string, err error) {
+	addrs, err := resolver.LookupIPAddr(ctx, domain)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -373,20 +341,11 @@ func hasOverlap(a, b []string) bool {
 }
 
 // HasHTTPSRecord checks if domain has HTTPS DNS record.
-func HasHTTPSRecord(domain string, server string) bool {
-	if server == "" {
-		server = "8.8.8.8:53"
-	}
-
+func HasHTTPSRecord(resolver *Resolver, domain string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	m := new(mdns.Msg)
-	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
-	m.RecursionDesired = true
-
-	client := new(mdns.Client)
-	resp, _, err := client.ExchangeContext(ctx, m, server)
+	resp, err := resolver.LookupHTTPS(ctx, domain)
 	if err != nil {
 		return false
 	}
