@@ -78,11 +78,11 @@ func printText(results []checker.RunResult, resolver string) int {
 	infos := 0
 
 	if resolver != "" {
-		fmt.Fprintf(os.Stdout, "\n%sResolver: %s%s\n", colorCyan, resolver, colorReset)
+		fmt.Fprintf(os.Stdout, "\n%sResolver%s: %s\n", colorCyan, colorReset, resolver)
 	}
 
 	for _, r := range results {
-		fmt.Fprintf(os.Stdout, "\n%s=== %s ===%s\n", colorCyan, r.Domain, colorReset)
+		fmt.Fprintf(os.Stdout, "\n%s===%s %s %s===%s\n", colorCyan, colorReset, r.Domain, colorCyan, colorReset)
 		for _, res := range r.Results {
 			var status string
 			if res.Info {
