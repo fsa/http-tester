@@ -22,7 +22,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Build release
-        run: ./scripts/release.sh
+        run: ./scripts/build-release.sh
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
