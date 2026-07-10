@@ -14,6 +14,7 @@ import (
 	"http-tester/report"
 
 	flag "github.com/spf13/pflag"
+	"golang.org/x/text/language"
 )
 
 func main() {
@@ -73,7 +74,13 @@ func main() {
 
 	// Print plan (only in text mode)
 	if *format == "text" || *format == "" {
-		fmt.Fprintf(os.Stderr, "\n\033[36mStarted\033[0m: %s\n", startTime.Format("02.01.2006 15:04:05 MST"))
+		lang, _ := language.Parse(os.Getenv("LANG"))
+		region, _ := lang.Region()
+		dateFmt := "02.01.2006 15:04:05 MST"
+		if region == language.MustParseRegion("US") || region == language.MustParseRegion("CA") {
+			dateFmt = "01/02/2006 15:04:05 MST"
+		}
+		fmt.Fprintf(os.Stderr, "\n\033[36mStarted\033[0m: %s\n", startTime.Format(dateFmt))
 		printPlan(cfg)
 	}
 
