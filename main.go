@@ -83,7 +83,7 @@ func main() {
 		allResults = append(allResults, arr)
 	}
 
-	exitCode := report.Print(allResults, *format)
+	exitCode := report.Print(allResults, resolverAddr, *format)
 	os.Exit(exitCode)
 }
 

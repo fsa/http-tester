@@ -21,8 +21,9 @@ const (
 )
 
 type JSONReport struct {
-	Domains []JSONDomain `json:"domains" yaml:"domains"`
-	Summary JSONSummary  `json:"summary" yaml:"summary"`
+	Resolver string       `json:"resolver,omitempty" yaml:"resolver,omitempty"`
+	Domains  []JSONDomain `json:"domains" yaml:"domains"`
+	Summary  JSONSummary  `json:"summary" yaml:"summary"`
 }
 
 type JSONDomain struct {
@@ -55,24 +56,28 @@ type JSONSummary struct {
 	Info     int `json:"info" yaml:"info"`
 }
 
-func Print(results []checker.RunResult, format string) int {
+func Print(results []checker.RunResult, resolver string, format string) int {
 	switch format {
 	case "json":
-		return printJSON(results, false)
+		return printJSON(results, resolver, false)
 	case "json-pretty", "json_pretty", "json-verbose":
-		return printJSON(results, true)
+		return printJSON(results, resolver, true)
 	case "yaml", "yml":
-		return printYAML(results)
+		return printYAML(results, resolver)
 	default:
-		return printText(results)
+		return printText(results, resolver)
 	}
 }
 
-func printText(results []checker.RunResult) int {
+func printText(results []checker.RunResult, resolver string) int {
 	total := 0
 	passed := 0
 	warnings := 0
 	infos := 0
+
+	if resolver != "" {
+		fmt.Fprintf(os.Stdout, "\nResolver: %s\n", resolver)
+	}
 
 	for _, r := range results {
 		fmt.Fprintf(os.Stdout, "\n%s=== %s ===%s\n", colorCyan, r.Domain, colorReset)
@@ -126,8 +131,10 @@ func printText(results []checker.RunResult) int {
 	return 0
 }
 
-func buildReport(results []checker.RunResult) JSONReport {
-	report := JSONReport{}
+func buildReport(results []checker.RunResult, resolver string) JSONReport {
+	report := JSONReport{
+		Resolver: resolver,
+	}
 	total := 0
 	passed := 0
 	warnings := 0
@@ -178,8 +185,8 @@ func buildReport(results []checker.RunResult) JSONReport {
 	return report
 }
 
-func printJSON(results []checker.RunResult, pretty bool) int {
-	report := buildReport(results)
+func printJSON(results []checker.RunResult, resolver string, pretty bool) int {
+	report := buildReport(results, resolver)
 
 	var data []byte
 	if pretty {
@@ -195,8 +202,8 @@ func printJSON(results []checker.RunResult, pretty bool) int {
 	return 0
 }
 
-func printYAML(results []checker.RunResult) int {
-	report := buildReport(results)
+func printYAML(results []checker.RunResult, resolver string) int {
+	report := buildReport(results, resolver)
 
 	data, err := yaml.Marshal(report)
 	if err != nil {
