@@ -170,7 +170,18 @@ All 9 check(s) passed
 ## Сборка
 
 ```bash
+# Локальная сборка (версия: dev)
 go build -o http-tester .
+
+# Сборка с указанием версии
+go build -ldflags "-X main.version=v1.0" -o http-tester .
+```
+
+При сборке через CI/CD версия автоматически берётся из git-тега:
+
+```bash
+VERSION=$(git describe --tags --always)
+go build -ldflags "-X main.version=$VERSION" -o http-tester .
 ```
 
 ## Зависимости
