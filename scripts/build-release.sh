@@ -1,30 +1,69 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
 
-VERSION=${1:-dev}
+set -Eeuo pipefail
+
 DIST="dist"
+PROGRAM="http-tester"
 
-echo "Building release $VERSION..."
+VERSION="${GITHUB_REF_NAME:-$(git describe --tags --always 2>/dev/null || echo dev)}"
 
-# Clean
+PLATFORMS=(
+    "linux amd64"
+    "linux arm64"
+    "windows amd64"
+    "darwin amd64"
+    "darwin arm64"
+)
+
+echo "==> Running tests..."
+go test ./...
+
+echo "==> Cleaning..."
 rm -rf "$DIST"
 mkdir -p "$DIST"
 
-# Linux amd64
-echo "Building Linux amd64..."
-mkdir -p "$DIST/linux-amd64"
-GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o "$DIST/linux-amd64/http-tester" .
-cp README.md "$DIST/linux-amd64/"
-cd "$DIST/linux-amd64" && tar -czf "../http-tester-${VERSION}-linux-amd64.tar.gz" * && cd ../..
-rm -rf "$DIST/linux-amd64"
+for platform in "${PLATFORMS[@]}"; do
+    read -r GOOS GOARCH <<< "$platform"
 
-# Windows amd64
-echo "Building Windows amd64..."
-mkdir -p "$DIST/windows-amd64"
-GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o "$DIST/windows-amd64/http-tester.exe" .
-cp README.md "$DIST/windows-amd64/"
-cd "$DIST/windows-amd64" && tar -czf "../http-tester-${VERSION}-windows-amd64.tar.gz" * && cd ../..
-rm -rf "$DIST/windows-amd64"
+    WORKDIR="$(mktemp -d)"
 
-echo "Done! Archives:"
-ls -lh "$DIST"/*.tar.gz
+    EXT=""
+    ARCHIVE_EXT="tar.gz"
+
+    if [[ "$GOOS" == "windows" ]]; then
+        EXT=".exe"
+        ARCHIVE_EXT="zip"
+    fi
+
+    ARCHIVE_NAME="${PROGRAM}-${VERSION}-${GOOS}-${GOARCH}.${ARCHIVE_EXT}"
+
+    echo "==> Building ${GOOS}/${GOARCH}"
+
+    GOOS="$GOOS" GOARCH="$GOARCH" \
+        go build \
+        -trimpath \
+        -ldflags="-s -w -X main.version=${VERSION}" \
+        -o "${WORKDIR}/${PROGRAM}${EXT}" .
+
+    cp README.md "${WORKDIR}/"
+
+    if [[ -f LICENSE ]]; then
+        cp LICENSE "${WORKDIR}/"
+    fi
+
+    pushd "$WORKDIR" >/dev/null
+
+    if [[ "$ARCHIVE_EXT" == "zip" ]]; then
+        zip -q -r "${OLDPWD}/${DIST}/${ARCHIVE_NAME}" .
+    else
+        tar -czf "${OLDPWD}/${DIST}/${ARCHIVE_NAME}" .
+    fi
+
+    popd >/dev/null
+
+    rm -rf "$WORKDIR"
+done
+
+echo
+echo "Release artifacts:"
+ls -lh "$DIST"
