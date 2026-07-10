@@ -449,44 +449,70 @@ func CheckConsistency(results []*checker.Result) []*checker.Result {
 	return warnings
 }
 
-// CheckStatusConsistency checks if all HTTP responses have consistent status types
-// (all 200 OK, or all same redirect type). Warns if different users may get different results.
+// CheckStatusConsistency checks if all HTTP/HTTPS responses have consistent status types.
+// HTTP and HTTPS are checked separately.
+// For HTTP: all responses should have the same status (e.g., all 200 or all 301).
+// For HTTPS: all responses should have the same status.
+// Failed responses are ignored (already reported as FAIL).
 func CheckStatusConsistency(results []*checker.Result) []*checker.Result {
-	// Collect HTTP check results (exclude DNS and other non-HTTP checks)
-	type statusEntry struct {
-		checker string
-		status  string
-	}
-	statuses := make(map[string][]string) // status -> list of checkers
+	// Separate HTTP and HTTPS checks
+	httpStatuses := make(map[string][]string) // status -> list of checkers
+	httpsStatuses := make(map[string][]string)
+
 	for _, r := range results {
-		if !isHTTPCheck(r.Checker) || !r.Passed {
-			continue
+		if !r.Passed {
+			continue // skip failed responses
 		}
 		status := parseStatusType(r.Details)
-		if status != "" {
-			statuses[status] = append(statuses[status], r.Checker)
+		if status == "" {
+			continue
+		}
+
+		checkerName := r.Checker
+		if strings.HasPrefix(checkerName, "http-ipv") {
+			// HTTP check (port 80): http-ipv4, http-ipv6
+			httpStatuses[status] = append(httpStatuses[status], checkerName)
+		} else if strings.HasPrefix(checkerName, "https-") {
+			// HTTPS check (port 443): https-http2-ipv4, https-http2-ipv6, https-http3-ipv4, https-http3-ipv6
+			httpsStatuses[status] = append(httpsStatuses[status], checkerName)
 		}
 	}
 
-	// Need at least 2 different status types to warn
-	if len(statuses) <= 1 {
-		return nil
+	var warnings []*checker.Result
+
+	// Check HTTP consistency
+	if len(httpStatuses) > 1 {
+		var parts []string
+		for status, checkers := range httpStatuses {
+			parts = append(parts, fmt.Sprintf("%s (%s)", status, strings.Join(checkers, ", ")))
+		}
+		warnings = append(warnings, &checker.Result{
+			Checker: "http-status-consistency",
+			Domain:  "",
+			Passed:  false,
+			Warning: true,
+			Details: fmt.Sprintf("inconsistent HTTP responses: %s",
+				strings.Join(parts, " vs ")),
+		})
 	}
 
-	// Build warning message
-	var parts []string
-	for status, checkers := range statuses {
-		parts = append(parts, fmt.Sprintf("%s (%s)", status, strings.Join(checkers, ", ")))
+	// Check HTTPS consistency
+	if len(httpsStatuses) > 1 {
+		var parts []string
+		for status, checkers := range httpsStatuses {
+			parts = append(parts, fmt.Sprintf("%s (%s)", status, strings.Join(checkers, ", ")))
+		}
+		warnings = append(warnings, &checker.Result{
+			Checker: "https-status-consistency",
+			Domain:  "",
+			Passed:  false,
+			Warning: true,
+			Details: fmt.Sprintf("inconsistent HTTPS responses: %s",
+				strings.Join(parts, " vs ")),
+		})
 	}
 
-	return []*checker.Result{{
-		Checker: "status-consistency",
-		Domain:  "",
-		Passed:  false,
-		Warning: true,
-		Details: fmt.Sprintf("inconsistent responses detected: %s — different users may get different results depending on their protocol and provider",
-			strings.Join(parts, " vs ")),
-	}}
+	return warnings
 }
 
 // isHTTPCheck returns true if the checker name is an HTTP check
