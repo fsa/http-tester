@@ -78,7 +78,7 @@ func printText(results []checker.RunResult, resolver string) int {
 	infos := 0
 
 	if resolver != "" {
-		fmt.Fprintf(os.Stdout, "\nResolver: %s\n", resolver)
+		fmt.Fprintf(os.Stdout, "\n%sResolver: %s%s\n", colorCyan, resolver, colorReset)
 	}
 
 	for _, r := range results {

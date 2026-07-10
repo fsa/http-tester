@@ -154,6 +154,8 @@ Resolver: 1.1.1.1:53
 All 9 check(s) passed
 ```
 
+*Примечание: в терминале заголовки `Started:`, `Testing:`, `Resolver:` и `=== ... ===` отображаются cyan-цветом.*
+
 ## Сборка
 
 ```bash

@@ -73,7 +73,7 @@ func main() {
 
 	// Print plan (only in text mode)
 	if *format == "text" || *format == "" {
-		fmt.Fprintf(os.Stderr, "\nStarted: %s\n", startTime.Format("02.01.2006 15:04:05 MST"))
+		fmt.Fprintf(os.Stderr, "\n\033[36mStarted: %s\033[0m\n", startTime.Format("02.01.2006 15:04:05 MST"))
 		printPlan(cfg)
 	}
 
