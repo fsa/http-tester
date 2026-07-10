@@ -97,6 +97,9 @@ func printText(results []checker.RunResult) int {
 			if res.RedirectTo != "" {
 				fmt.Fprintf(os.Stdout, "         -> %s\n", res.RedirectTo)
 			}
+			if res.AltSvc != "" {
+				fmt.Fprintf(os.Stdout, "         Alt-Svc header found: %s\n", res.AltSvc)
+			}
 			for _, rec := range res.Records {
 				fmt.Fprintf(os.Stdout, "         %s %s\n", rec.Type, rec.Value)
 			}
@@ -224,6 +227,9 @@ func FormatText(results []checker.RunResult) string {
 			b.WriteString(fmt.Sprintf("  [%s] %s: %s\n", status, res.Checker, res.Details))
 			if res.RedirectTo != "" {
 				b.WriteString(fmt.Sprintf("         -> %s\n", res.RedirectTo))
+			}
+			if res.AltSvc != "" {
+				b.WriteString(fmt.Sprintf("         Alt-Svc header found: %s\n", res.AltSvc))
 			}
 			for _, rec := range res.Records {
 				b.WriteString(fmt.Sprintf("         %s %s\n", rec.Type, rec.Value))

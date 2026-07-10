@@ -269,6 +269,9 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 	if loc := resp.Header.Get("Location"); loc != "" {
 		result.RedirectTo = loc
 	}
+	if altSvc := resp.Header.Get("Alt-Svc"); altSvc != "" {
+		result.AltSvc = altSvc
+	}
 	return result
 }
 
