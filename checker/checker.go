@@ -17,6 +17,7 @@ type Result struct {
 	HTTPVersion string
 	AltSvc      string
 	RedirectTo  string
+	Body        []byte // normalized response body for consistency check
 }
 
 type Checker interface {
