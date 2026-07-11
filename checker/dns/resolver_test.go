@@ -2,11 +2,11 @@ package dns
 
 import "testing"
 
-func TestNormalizeAddr(t *testing.T) {
+func TestNewResolver(t *testing.T) {
 	tests := []struct {
-		name string
-		addr string
-		want string
+		name   string
+		addr   string
+		server string
 	}{
 		// IPv4 without port
 		{"ipv4 no port", "8.8.8.8", "8.8.8.8:53"},
@@ -34,10 +34,17 @@ func TestNormalizeAddr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := normalizeAddr(tt.addr)
-			if got != tt.want {
-				t.Errorf("normalizeAddr(%q) = %q, want %q", tt.addr, got, tt.want)
+			r := NewResolver(tt.addr)
+			if r.Server() != tt.server {
+				t.Errorf("NewResolver(%q).Server() = %q, want %q", tt.addr, r.Server(), tt.server)
 			}
 		})
+	}
+}
+
+func TestNewResolver_SystemMode(t *testing.T) {
+	r := NewResolver("")
+	if r.Server() != "system" {
+		t.Errorf("NewResolver(\"\").Server() = %q, want %q", r.Server(), "system")
 	}
 }
