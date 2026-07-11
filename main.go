@@ -79,34 +79,14 @@ func main() {
 		return
 	}
 
-	var cfg *config.DomainConfig
+	domain := ""
+	if flag.NArg() > 0 {
+		domain = flag.Arg(0)
+	}
 
-	if configFile != "" {
-		// Config mode: load from file
-		var err error
-		cfg, err = config.LoadDomain(configFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			os.Exit(1)
-		}
-	} else if flag.NArg() > 0 {
-		// Quick mode: test domain with default config
-		cfg = &config.DomainConfig{
-			Name:   flag.Arg(0),
-			HasDNS: true,
-			DNS: &config.DNSChecks{
-				A:     config.DNSOptional,
-				AAAA:  config.DNSOptional,
-				HTTPS: config.DNSOptional,
-			},
-			HasWeb: true,
-			Web: &config.WebChecks{
-				HTTP:  config.HTTPAny,
-				HTTPS: config.HTTPAny,
-			},
-		}
-	} else {
-		flag.Usage()
+	cfg, err := config.Load(domain, configFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 

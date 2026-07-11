@@ -5,7 +5,29 @@ import (
 	"testing"
 )
 
-func TestLoadDomain(t *testing.T) {
+func TestLoad_DomainFromCLI(t *testing.T) {
+	cfg, err := Load("example.com", "")
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Name != "example.com" {
+		t.Errorf("Name = %q, want %q", cfg.Name, "example.com")
+	}
+	if cfg.DNS == nil {
+		t.Fatal("DNS is nil")
+	}
+	if cfg.DNS.A != DNSOptional {
+		t.Errorf("DNS.A = %q, want %q", cfg.DNS.A, DNSOptional)
+	}
+	if cfg.Web == nil {
+		t.Fatal("Web is nil")
+	}
+	if cfg.Web.HTTP != HTTPAny {
+		t.Errorf("Web.HTTP = %q, want %q", cfg.Web.HTTP, HTTPAny)
+	}
+}
+
+func TestLoad_ConfigFile(t *testing.T) {
 	yaml := `
 name: example.com
 dns:
@@ -33,9 +55,9 @@ aliases:
 	}
 	tmpFile.Close()
 
-	cfg, err := LoadDomain(tmpFile.Name())
+	cfg, err := Load("", tmpFile.Name())
 	if err != nil {
-		t.Fatalf("LoadDomain error: %v", err)
+		t.Fatalf("Load error: %v", err)
 	}
 
 	if cfg.Name != "example.com" {
@@ -76,7 +98,34 @@ aliases:
 	}
 }
 
-func TestLoadDomain_EmptyDNS(t *testing.T) {
+func TestLoad_DomainFromFileOverridesDefault(t *testing.T) {
+	yaml := `
+name: from-file.com
+dns:
+  a: yes
+`
+	tmpFile, err := os.CreateTemp("", "config-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(yaml); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	// Domain from CLI, but config file provides name — file wins
+	cfg, err := Load("cli.com", tmpFile.Name())
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Name != "from-file.com" {
+		t.Errorf("Name = %q, want %q (file overrides default)", cfg.Name, "from-file.com")
+	}
+}
+
+func TestLoad_EmptyDNS(t *testing.T) {
 	yaml := `
 name: example.com
 dns:
@@ -94,12 +143,11 @@ web:
 	}
 	tmpFile.Close()
 
-	cfg, err := LoadDomain(tmpFile.Name())
+	cfg, err := Load("", tmpFile.Name())
 	if err != nil {
-		t.Fatalf("LoadDomain error: %v", err)
+		t.Fatalf("Load error: %v", err)
 	}
 
-	// Empty dns: creates struct with all optional
 	if cfg.DNS == nil {
 		t.Fatal("Empty dns: DNS should not be nil")
 	}
@@ -114,7 +162,7 @@ web:
 	}
 }
 
-func TestLoadDomain_EmptyWeb(t *testing.T) {
+func TestLoad_EmptyWeb(t *testing.T) {
 	yaml := `
 name: example.com
 dns:
@@ -132,12 +180,11 @@ web:
 	}
 	tmpFile.Close()
 
-	cfg, err := LoadDomain(tmpFile.Name())
+	cfg, err := Load("", tmpFile.Name())
 	if err != nil {
-		t.Fatalf("LoadDomain error: %v", err)
+		t.Fatalf("Load error: %v", err)
 	}
 
-	// Empty web: results in nil pointer
 	if cfg.Web != nil {
 		t.Errorf("Empty web: Web should be nil, got %+v", cfg.Web)
 	}
@@ -146,24 +193,14 @@ web:
 	}
 }
 
-func TestLoadDomain_HasWebDetection(t *testing.T) {
-	yamlWithWeb := `
-name: example.com
-web:
-`
-	yamlWithoutWeb := `
-name: example.com
-dns:
-  a: yes
-`
-
+func TestLoad_HasWebDetection(t *testing.T) {
 	tests := []struct {
 		name    string
 		yaml    string
 		wantWeb bool
 	}{
-		{"with web", yamlWithWeb, true},
-		{"without web", yamlWithoutWeb, false},
+		{"with web", "name: example.com\nweb:\n", true},
+		{"without web", "name: example.com\ndns:\n  a: yes\n", false},
 	}
 
 	for _, tt := range tests {
@@ -179,9 +216,9 @@ dns:
 			}
 			tmpFile.Close()
 
-			cfg, err := LoadDomain(tmpFile.Name())
+			cfg, err := Load("", tmpFile.Name())
 			if err != nil {
-				t.Fatalf("LoadDomain error: %v", err)
+				t.Fatalf("Load error: %v", err)
 			}
 
 			if cfg.HasWeb != tt.wantWeb {
@@ -191,11 +228,101 @@ dns:
 	}
 }
 
-func TestLoadDomain_HTTPModeFromAny(t *testing.T) {
+func TestLoad_InvalidDNS(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+	}{
+		{"invalid a", "name: x\ndns:\n  a: maybe\n"},
+		{"invalid aaaa", "name: x\ndns:\n  aaaa: true\n"},
+		{"invalid https", "name: x\ndns:\n  https: blah\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile, err := os.CreateTemp("", "config-*.yaml")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.Remove(tmpFile.Name())
+
+			if _, err := tmpFile.WriteString(tt.yaml); err != nil {
+				t.Fatal(err)
+			}
+			tmpFile.Close()
+
+			_, err = Load("", tmpFile.Name())
+			if err == nil {
+				t.Error("expected error for invalid DNS value")
+			}
+		})
+	}
+}
+
+func TestLoad_InvalidWeb(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+	}{
+		{"invalid http", "name: x\nweb:\n  http: blah\n"},
+		{"invalid https", "name: x\nweb:\n  https: true\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile, err := os.CreateTemp("", "config-*.yaml")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.Remove(tmpFile.Name())
+
+			if _, err := tmpFile.WriteString(tt.yaml); err != nil {
+				t.Fatal(err)
+			}
+			tmpFile.Close()
+
+			_, err = Load("", tmpFile.Name())
+			if err == nil {
+				t.Error("expected error for invalid web value")
+			}
+		})
+	}
+}
+
+func TestLoad_NoDomain(t *testing.T) {
+	_, err := Load("", "")
+	if err == nil {
+		t.Error("expected error when no domain and no config")
+	}
+}
+
+func TestLoad_DomainRequired(t *testing.T) {
+	yaml := `
+dns:
+  a: yes
+`
+	tmpFile, err := os.CreateTemp("", "config-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(yaml); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	_, err = Load("", tmpFile.Name())
+	if err == nil {
+		t.Error("expected error when config has no name and no domain from CLI")
+	}
+}
+
+func TestLoadDomain_Wrapper(t *testing.T) {
 	yaml := `
 name: example.com
-web:
-  http: any
+dns:
+  a: yes
 `
 	tmpFile, err := os.CreateTemp("", "config-*.yaml")
 	if err != nil {
@@ -212,11 +339,7 @@ web:
 	if err != nil {
 		t.Fatalf("LoadDomain error: %v", err)
 	}
-
-	if cfg.Web == nil {
-		t.Fatal("Web is nil")
-	}
-	if cfg.Web.HTTP != HTTPAny {
-		t.Errorf("http: any should be any, got %q", cfg.Web.HTTP)
+	if cfg.Name != "example.com" {
+		t.Errorf("Name = %q, want %q", cfg.Name, "example.com")
 	}
 }
