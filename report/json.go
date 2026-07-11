@@ -7,11 +7,14 @@ import (
 	"time"
 
 	"http-tester/checker"
+	"http-tester/config"
 )
 
 type JSONFormatter struct {
 	Pretty bool
 }
+
+func (f *JSONFormatter) Start(cfg *config.DomainConfig, startTime time.Time) {}
 
 func (f *JSONFormatter) Print(stats *checker.Stats, resolver string, startTime time.Time) int {
 	report := buildReport(stats, resolver, startTime)

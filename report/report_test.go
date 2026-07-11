@@ -25,7 +25,7 @@ func TestPrintText(t *testing.T) {
 		},
 	})
 
-	err := Print("text", stats, "8.8.8.8:53", time.Now())
+	err := Print("text", stats, nil, "8.8.8.8:53", time.Now())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestPrintJSON(t *testing.T) {
 		},
 	})
 
-	err := Print("json", stats, "8.8.8.8:53", time.Now())
+	err := Print("json", stats, nil, "8.8.8.8:53", time.Now())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestPrintJSON(t *testing.T) {
 		t.Errorf("exitCode = %d, want 0", stats.Code())
 	}
 
-	err = Print("json-pretty", stats, "8.8.8.8:53", time.Now())
+	err = Print("json-pretty", stats, nil, "8.8.8.8:53", time.Now())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestPrintYAML(t *testing.T) {
 		},
 	})
 
-	err := Print("yaml", stats, "8.8.8.8:53", time.Now())
+	err := Print("yaml", stats, nil, "8.8.8.8:53", time.Now())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestPrintText_WithError(t *testing.T) {
 		},
 	})
 
-	err := Print("text", stats, "127.0.0.2:53", time.Now())
+	err := Print("text", stats, nil, "127.0.0.2:53", time.Now())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestPrintJSON_WithError(t *testing.T) {
 
 func TestPrintUnknownFormat(t *testing.T) {
 	stats := &checker.Stats{}
-	err := Print("unknown", stats, "", time.Now())
+	err := Print("unknown", stats, nil, "", time.Now())
 	if err == nil {
 		t.Error("expected error for unknown format")
 	}

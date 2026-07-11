@@ -6,11 +6,14 @@ import (
 	"time"
 
 	"http-tester/checker"
+	"http-tester/config"
 
 	"gopkg.in/yaml.v3"
 )
 
 type YAMLFormatter struct{}
+
+func (f *YAMLFormatter) Start(cfg *config.DomainConfig, startTime time.Time) {}
 
 func (f *YAMLFormatter) Print(stats *checker.Stats, resolver string, startTime time.Time) int {
 	report := buildReport(stats, resolver, startTime)

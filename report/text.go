@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"http-tester/checker"
+	"http-tester/config"
+
+	"golang.org/x/text/language"
 )
 
 type TextFormatter struct{}
@@ -24,6 +27,57 @@ func displayTag(tag string) string {
 		return label
 	}
 	return tag
+}
+
+func (f *TextFormatter) Start(cfg *config.DomainConfig, startTime time.Time) {
+	lang, _ := language.Parse(os.Getenv("LANG"))
+	region, _ := lang.Region()
+	dateFmt := "02.01.2006 15:04:05 MST"
+	if region == language.MustParseRegion("US") || region == language.MustParseRegion("CA") {
+		dateFmt = "01/02/2006 15:04:05 MST"
+	}
+	fmt.Fprintf(os.Stderr, "\n\033[36mStarted\033[0m: %s\n", startTime.Format(dateFmt))
+	if cfg != nil {
+		f.printPlan(cfg)
+	}
+}
+
+func (f *TextFormatter) printPlan(cfg *config.DomainConfig) {
+	fmt.Fprintf(os.Stderr, "\n\033[36mTesting\033[0m: %s\n", cfg.Name)
+
+	if cfg.HasDNS {
+		parts := []string{}
+		if cfg.DNS != nil {
+			if cfg.DNS.A != "" {
+				parts = append(parts, fmt.Sprintf("A(%s)", cfg.DNS.A))
+			}
+			if cfg.DNS.AAAA != "" {
+				parts = append(parts, fmt.Sprintf("AAAA(%s)", cfg.DNS.AAAA))
+			}
+			if cfg.DNS.HTTPS != "" {
+				parts = append(parts, fmt.Sprintf("HTTPS(%s)", cfg.DNS.HTTPS))
+			}
+		}
+		if len(parts) > 0 {
+			fmt.Fprintf(os.Stderr, "  DNS: %s\n", strings.Join(parts, ", "))
+		}
+	}
+
+	if cfg.HasWeb {
+		httpMode := "any"
+		httpsMode := "any"
+		if cfg.Web != nil {
+			if cfg.Web.HTTP != "" {
+				httpMode = string(cfg.Web.HTTP)
+			}
+			if cfg.Web.HTTPS != "" {
+				httpsMode = string(cfg.Web.HTTPS)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "  Web: HTTP(%s), HTTPS(%s)\n", httpMode, httpsMode)
+	}
+
+	fmt.Fprintf(os.Stderr, "\n")
 }
 
 type testGroup struct {

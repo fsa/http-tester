@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"http-tester/checker"
+	"http-tester/config"
 )
 
 const (
@@ -59,6 +60,7 @@ type JSONSummary struct {
 }
 
 type Formatter interface {
+	Start(cfg *config.DomainConfig, startTime time.Time)
 	Print(stats *checker.Stats, resolver string, startTime time.Time) int
 }
 
@@ -72,11 +74,12 @@ var formatters = map[string]Formatter{
 	"yml":         &YAMLFormatter{},
 }
 
-func Print(format string, stats *checker.Stats, resolver string, startTime time.Time) error {
+func Print(format string, stats *checker.Stats, cfg *config.DomainConfig, resolver string, startTime time.Time) error {
 	f, ok := formatters[format]
 	if !ok {
 		return fmt.Errorf("unknown format: %q (available: text, json, json-pretty, yaml)", format)
 	}
+	f.Start(cfg, startTime)
 	f.Print(stats, resolver, startTime)
 	return nil
 }
