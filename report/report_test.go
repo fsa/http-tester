@@ -154,3 +154,64 @@ func TestPrintYAML(t *testing.T) {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
 }
+
+func TestPrintText_WithError(t *testing.T) {
+	results := []checker.RunResult{
+		{
+			Domain: "example.com",
+			Results: []*checker.Result{
+				{
+					Checker: "dns",
+					Domain:  "example.com",
+					Passed:  false,
+					Error:   true,
+					Details: "resolver unreachable",
+				},
+				{
+					Checker: "dns-https",
+					Domain:  "example.com",
+					Passed:  false,
+					Error:   true,
+					Details: "HTTPS lookup failed",
+				},
+			},
+		},
+	}
+
+	exitCode := Print(results, "127.0.0.2:53", time.Now(), "text")
+	if exitCode != 1 {
+		t.Errorf("exitCode = %d, want 1 (errors count as failures)", exitCode)
+	}
+}
+
+func TestPrintJSON_WithError(t *testing.T) {
+	results := []checker.RunResult{
+		{
+			Domain: "example.com",
+			Results: []*checker.Result{
+				{
+					Checker: "dns",
+					Domain:  "example.com",
+					Passed:  false,
+					Error:   true,
+					Details: "resolver unreachable",
+				},
+			},
+		},
+	}
+
+	report := buildReport(results, "127.0.0.2:53", time.Now())
+
+	if report.Summary.Total != 1 {
+		t.Errorf("Total = %d, want 1", report.Summary.Total)
+	}
+	if report.Summary.Errors != 1 {
+		t.Errorf("Errors = %d, want 1", report.Summary.Errors)
+	}
+	if report.Summary.Passed != 0 {
+		t.Errorf("Passed = %d, want 0", report.Summary.Passed)
+	}
+	if report.Summary.Failed != 0 {
+		t.Errorf("Failed = %d, want 0", report.Summary.Failed)
+	}
+}

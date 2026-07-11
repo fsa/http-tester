@@ -12,6 +12,7 @@ type Result struct {
 	Passed      bool
 	Warning     bool
 	Info        bool
+	Error       bool // test could not be completed (resolver unreachable, timeout)
 	Details     string
 	Records     []Record
 	HTTPVersion string

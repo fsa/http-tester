@@ -215,13 +215,10 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 
 	var dnsResult *dns.DNSResult
 	httpsRecordExists := false
-	dnsChecked := false  // were any DNS checks performed?
-	dnsPassed := false   // did at least one DNS check pass?
 
 	// Run DNS checks
 	if hasDNS && dnsChecks != nil {
 		if dnsChecks.A != "" || dnsChecks.AAAA != "" {
-			dnsChecked = true
 			c := dns.New(resolver)
 			c.A = dnsChecks.A
 			c.AAAA = dnsChecks.AAAA
@@ -231,20 +228,17 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 					Checker: c.Name(),
 					Domain:  domain,
 					Passed:  false,
+					Error:   true,
 					Details: fmt.Sprintf("error: %v", err),
 				}}
 			} else {
 				dnsResult = result
-				if len(results) > 0 && results[0].Passed {
-					dnsPassed = true
-				}
 			}
 			rr.Results = append(rr.Results, results...)
 		}
 
 		// HTTPS record check
 		if dnsChecks.HTTPS != "" {
-			dnsChecked = true
 			c := dns.NewHTTPSChecker(resolver)
 			results, err := c.Check(domain)
 			if err != nil {
@@ -252,6 +246,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 					Checker: c.Name(),
 					Domain:  domain,
 					Passed:  false,
+					Error:   true,
 					Details: fmt.Sprintf("error: %v", err),
 				}}
 			} else {
@@ -279,13 +274,10 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 						if r.Passed && len(r.Records) > 0 {
 							httpsFound = true
 							r.Details = fmt.Sprintf("found %d HTTPS record(s) (optional)", len(r.Records))
-						} else if !r.Passed {
-							// Only mark as passed if it's genuinely "no records",
-							// not a connection error
-							if !strings.Contains(r.Details, "lookup failed") {
-								r.Passed = true
-								r.Details = "no HTTPS records (optional)"
-							}
+						} else if !r.Passed && !r.Error {
+							// No records but no error — mark as passed for optional
+							r.Passed = true
+							r.Details = "no HTTPS records (optional)"
 						}
 					}
 					if httpsFound {
@@ -295,6 +287,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 								Checker: "dns-consistency",
 								Domain:  domain,
 								Passed:  false,
+								Error:   true,
 								Details: fmt.Sprintf("error: %v", err),
 							}}
 						}
@@ -315,6 +308,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 								Checker: "dns-consistency",
 								Domain:  domain,
 								Passed:  false,
+								Error:   true,
 								Details: fmt.Sprintf("error: %v", err),
 							}}
 						}
@@ -322,27 +316,8 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 					}
 				}
 			}
-			// Track if HTTPS check passed
-			for _, r := range results {
-				if r.Passed {
-					dnsPassed = true
-					break
-				}
-			}
 			rr.Results = append(rr.Results, results...)
 		}
-	}
-
-	// If DNS was checked but all checks failed, stop here
-	if dnsChecked && !dnsPassed {
-		rr.Results = append(rr.Results, &checker.Result{
-			Checker: "dns",
-			Domain:  domain,
-			Passed:  false,
-			Warning: true,
-			Details: "all DNS checks failed — web tests skipped",
-		})
-		return rr
 	}
 
 	// Run automatic HTTP checks if enabled

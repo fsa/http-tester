@@ -36,6 +36,7 @@ func (c *HTTPSChecker) Check(domain string) ([]*checker.Result, error) {
 	resp, err := c.resolver.LookupHTTPS(ctx, domain)
 	if err != nil {
 		result.Passed = false
+		result.Error = true
 		result.Details = fmt.Sprintf("HTTPS lookup failed: %v", err)
 		return []*checker.Result{result}, nil
 	}

@@ -43,6 +43,7 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 	addrs, err := c.resolver.LookupIPAddr(ctx, domain)
 	if err != nil {
 		result.Passed = false
+		result.Error = true
 		result.Details = fmt.Sprintf("resolution failed: %v", err)
 		return []*checker.Result{result}, dnsResult, nil
 	}

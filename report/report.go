@@ -37,6 +37,7 @@ type JSONResult struct {
 	Passed      bool         `json:"passed" yaml:"passed"`
 	Warning     bool         `json:"warning,omitempty" yaml:"warning,omitempty"`
 	Info        bool         `json:"info,omitempty" yaml:"info,omitempty"`
+	Error       bool         `json:"error,omitempty" yaml:"error,omitempty"`
 	Details     string       `json:"details" yaml:"details"`
 	Records     []JSONRecord `json:"records,omitempty" yaml:"records,omitempty"`
 	HTTPVersion string       `json:"http_version,omitempty" yaml:"http_version,omitempty"`
@@ -53,6 +54,7 @@ type JSONSummary struct {
 	Total    int `json:"total" yaml:"total"`
 	Passed   int `json:"passed" yaml:"passed"`
 	Failed   int `json:"failed" yaml:"failed"`
+	Errors   int `json:"errors" yaml:"errors"`
 	Warnings int `json:"warnings" yaml:"warnings"`
 	Info     int `json:"info" yaml:"info"`
 }
@@ -75,6 +77,7 @@ func printText(results []checker.RunResult, resolver string) int {
 	passed := 0
 	warnings := 0
 	infos := 0
+	errors := 0
 
 	if resolver != "" {
 		fmt.Fprintf(os.Stdout, "\n%sResolver%s: %s\n", colorCyan, colorReset, resolver)
@@ -90,6 +93,10 @@ func printText(results []checker.RunResult, resolver string) int {
 			} else if res.Warning {
 				status = colorYellow + "WARN" + colorReset
 				warnings++
+			} else if res.Error {
+				status = colorRed + "ERROR" + colorReset
+				total++
+				errors++
 			} else {
 				total++
 				if res.Passed {
@@ -116,8 +123,12 @@ func printText(results []checker.RunResult, resolver string) int {
 	if total == passed {
 		fmt.Fprintf(os.Stdout, "%sAll %d check(s) passed%s\n", colorGreen, total, colorReset)
 	} else {
-		failed := total - passed
-		fmt.Fprintf(os.Stdout, "%s%d passed%s, %s%d failed%s\n", colorGreen, passed, colorReset, colorRed, failed, colorReset)
+		failed := total - passed - errors
+		fmt.Fprintf(os.Stdout, "%s%d passed%s, %s%d failed%s", colorGreen, passed, colorReset, colorRed, failed, colorReset)
+		if errors > 0 {
+			fmt.Fprintf(os.Stdout, ", %s%d error(s)%s", colorRed, errors, colorReset)
+		}
+		fmt.Fprintln(os.Stdout)
 	}
 	if warnings > 0 {
 		fmt.Fprintf(os.Stdout, "%s%d warning(s)%s\n", colorYellow, warnings, colorReset)
@@ -141,6 +152,7 @@ func buildReport(results []checker.RunResult, resolver string, startTime time.Ti
 	passed := 0
 	warnings := 0
 	infos := 0
+	errors := 0
 
 	for _, r := range results {
 		domain := JSONDomain{Name: r.Domain}
@@ -151,7 +163,9 @@ func buildReport(results []checker.RunResult, resolver string, startTime time.Ti
 				warnings++
 			} else {
 				total++
-				if res.Passed {
+				if res.Error {
+					errors++
+				} else if res.Passed {
 					passed++
 				}
 			}
@@ -160,6 +174,7 @@ func buildReport(results []checker.RunResult, resolver string, startTime time.Ti
 				Passed:      res.Passed,
 				Warning:     res.Warning,
 				Info:        res.Info,
+				Error:       res.Error,
 				Details:     res.Details,
 				HTTPVersion: res.HTTPVersion,
 				AltSvc:      res.AltSvc,
@@ -179,7 +194,8 @@ func buildReport(results []checker.RunResult, resolver string, startTime time.Ti
 	report.Summary = JSONSummary{
 		Total:    total,
 		Passed:   passed,
-		Failed:   total - passed,
+		Failed:   total - passed - errors,
+		Errors:   errors,
 		Warnings: warnings,
 		Info:     infos,
 	}
@@ -219,5 +235,3 @@ func printYAML(results []checker.RunResult, resolver string, startTime time.Time
 	}
 	return 0
 }
-
-
