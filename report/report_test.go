@@ -6,11 +6,10 @@ import (
 	"time"
 
 	"http-tester/checker"
-	"http-tester/checker/teststats"
 )
 
-func makeStats(results ...checker.RunResult) *teststats.Stats {
-	s := &teststats.Stats{}
+func makeStats(results ...checker.RunResult) *checker.Stats {
+	s := &checker.Stats{}
 	for _, r := range results {
 		s.AddRunResult(r)
 	}
@@ -26,9 +25,12 @@ func TestPrintText(t *testing.T) {
 		},
 	})
 
-	exitCode := Print(stats, "8.8.8.8:53", time.Now(), "text")
-	if exitCode != teststats.Fail {
-		t.Errorf("exitCode = %d, want %d (has failures)", exitCode, teststats.Fail)
+	err := Print("text", stats, "8.8.8.8:53", time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Code() != checker.Fail {
+		t.Errorf("exitCode = %d, want %d (has failures)", stats.Code(), checker.Fail)
 	}
 }
 
@@ -43,14 +45,17 @@ func TestPrintJSON(t *testing.T) {
 		},
 	})
 
-	exitCode := Print(stats, "8.8.8.8:53", time.Now(), "json")
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
+	err := Print("json", stats, "8.8.8.8:53", time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Code() != 0 {
+		t.Errorf("exitCode = %d, want 0", stats.Code())
 	}
 
-	exitCode = Print(stats, "8.8.8.8:53", time.Now(), "json-pretty")
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
+	err = Print("json-pretty", stats, "8.8.8.8:53", time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -112,9 +117,12 @@ func TestPrintYAML(t *testing.T) {
 		},
 	})
 
-	exitCode := Print(stats, "8.8.8.8:53", time.Now(), "yaml")
-	if exitCode != 0 {
-		t.Errorf("exitCode = %d, want 0", exitCode)
+	err := Print("yaml", stats, "8.8.8.8:53", time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Code() != 0 {
+		t.Errorf("exitCode = %d, want 0", stats.Code())
 	}
 }
 
@@ -127,9 +135,12 @@ func TestPrintText_WithError(t *testing.T) {
 		},
 	})
 
-	exitCode := Print(stats, "127.0.0.2:53", time.Now(), "text")
-	if exitCode != teststats.Error {
-		t.Errorf("exitCode = %d, want %d (errors)", exitCode, teststats.Error)
+	err := Print("text", stats, "127.0.0.2:53", time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Code() != checker.Error {
+		t.Errorf("exitCode = %d, want %d (errors)", stats.Code(), checker.Error)
 	}
 }
 
@@ -154,5 +165,13 @@ func TestPrintJSON_WithError(t *testing.T) {
 	}
 	if report.Summary.Failed != 0 {
 		t.Errorf("Failed = %d, want 0", report.Summary.Failed)
+	}
+}
+
+func TestPrintUnknownFormat(t *testing.T) {
+	stats := &checker.Stats{}
+	err := Print("unknown", stats, "", time.Now())
+	if err == nil {
+		t.Error("expected error for unknown format")
 	}
 }

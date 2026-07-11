@@ -30,7 +30,7 @@ func (c *DNSChecker) Name() string {
 	return "dns"
 }
 
-func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error) {
+func (c *DNSChecker) Check(domain string, stats *checker.Stats) *DNSResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -47,7 +47,8 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 		result.Passed = false
 		result.Error = true
 		result.Details = fmt.Sprintf("resolution failed: %v", err)
-		return []*checker.Result{result}, dnsResult, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+		return dnsResult
 	}
 
 	var ipv4s, ipv6s []string
@@ -70,7 +71,8 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 		if len(ipv4s) == 0 {
 			result.Passed = false
 			result.Details = "no A records found (expected)"
-			return []*checker.Result{result}, dnsResult, nil
+			stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+			return dnsResult
 		}
 		for _, ip := range ipv4s {
 			result.Records = append(result.Records, checker.Record{
@@ -82,7 +84,8 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 		if len(ipv4s) > 0 {
 			result.Passed = false
 			result.Details = fmt.Sprintf("A records found but not expected: %v", ipv4s)
-			return []*checker.Result{result}, dnsResult, nil
+			stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+			return dnsResult
 		}
 	} else if c.A == config.DNSOptional {
 		for _, ip := range ipv4s {
@@ -101,7 +104,8 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 		if len(ipv6s) == 0 {
 			result.Passed = false
 			result.Details = "no AAAA records found (expected)"
-			return []*checker.Result{result}, dnsResult, nil
+			stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+			return dnsResult
 		}
 		for _, ip := range ipv6s {
 			result.Records = append(result.Records, checker.Record{
@@ -113,7 +117,8 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 		if len(ipv6s) > 0 {
 			result.Passed = false
 			result.Details = fmt.Sprintf("AAAA records found but not expected: %v", ipv6s)
-			return []*checker.Result{result}, dnsResult, nil
+			stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+			return dnsResult
 		}
 	} else if c.AAAA == config.DNSOptional {
 		for _, ip := range ipv6s {
@@ -132,7 +137,6 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 		result.Details = fmt.Sprintf("%s resolved", domain)
 	}
 
-	return []*checker.Result{result}, dnsResult, nil
+	stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+	return dnsResult
 }
-
-

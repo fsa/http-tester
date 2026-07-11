@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"http-tester/checker"
+	"http-tester/config"
 
 	mdns "github.com/miekg/dns"
 )
@@ -23,7 +24,7 @@ func (c *HTTPSChecker) Name() string {
 	return "dns-https"
 }
 
-func (c *HTTPSChecker) Check(domain string) ([]*checker.Result, error) {
+func (c *HTTPSChecker) Check(domain string, mode config.DNSRecordCheck, stats *checker.Stats) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -38,13 +39,15 @@ func (c *HTTPSChecker) Check(domain string) ([]*checker.Result, error) {
 		result.Passed = false
 		result.Error = true
 		result.Details = fmt.Sprintf("HTTPS lookup failed: %v", err)
-		return []*checker.Result{result}, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+		return false
 	}
 
 	if resp.Rcode != mdns.RcodeSuccess {
 		result.Passed = false
 		result.Details = "no HTTPS records"
-		return []*checker.Result{result}, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+		return false
 	}
 
 	for _, rr := range resp.Answer {
@@ -60,11 +63,25 @@ func (c *HTTPSChecker) Check(domain string) ([]*checker.Result, error) {
 	if len(result.Records) == 0 {
 		result.Passed = false
 		result.Details = "no HTTPS records in response"
-		return []*checker.Result{result}, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+		return false
 	}
 
-	result.Details = fmt.Sprintf("found %d HTTPS record(s)", len(result.Records))
-	return []*checker.Result{result}, nil
+	httpsRecordExists := true
+
+	// Apply mode adjustments
+	switch mode {
+	case config.DNSNo:
+		result.Passed = false
+		result.Details = fmt.Sprintf("HTTPS records found but not expected: %d record(s)", len(result.Records))
+	case config.DNSOptional:
+		result.Details = fmt.Sprintf("found %d HTTPS record(s) (optional)", len(result.Records))
+	default:
+		result.Details = fmt.Sprintf("found %d HTTPS record(s)", len(result.Records))
+	}
+
+	stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
+	return httpsRecordExists
 }
 
 func formatSVCB(priority uint16, target string, params []mdns.SVCBKeyValue) string {
@@ -128,40 +145,51 @@ func parseHTTPSRecord(h *mdns.HTTPS) HTTPSRecordInfo {
 }
 
 // ConsistencyCheck performs comprehensive HTTPS record validation per RFC 9460
-func ConsistencyCheck(domain string, resolver *Resolver) ([]*checker.Result, error) {
+func ConsistencyCheck(domain string, resolver *Resolver, stats *checker.Stats) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-
-	result := &checker.Result{
-		Checker: "dns-consistency",
-		Domain:  domain,
-		Passed:  true,
-	}
 
 	// 1. Resolve A/AAAA for the domain
 	a4s, a6s, err := resolveIPs(ctx, resolver, domain)
 	if err != nil {
-		result.Passed = false
-		result.Details = fmt.Sprintf("base resolution failed: %v", err)
-		return []*checker.Result{result}, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
+			Checker: "dns-consistency",
+			Domain:  domain,
+			Passed:  false,
+			Details: fmt.Sprintf("base resolution failed: %v", err),
+		}}})
+		return
 	}
 	if len(a4s) == 0 && len(a6s) == 0 {
-		result.Passed = false
-		result.Details = "no A/AAAA records for domain"
-		return []*checker.Result{result}, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
+			Checker: "dns-consistency",
+			Domain:  domain,
+			Passed:  false,
+			Details: "no A/AAAA records for domain",
+		}}})
+		return
 	}
 
 	// 2. Fetch HTTPS records
 	resp, err := resolver.LookupHTTPS(ctx, domain)
 	if err != nil {
-		result.Passed = false
-		result.Details = fmt.Sprintf("HTTPS lookup failed: %v", err)
-		return []*checker.Result{result}, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
+			Checker: "dns-consistency",
+			Domain:  domain,
+			Passed:  false,
+			Details: fmt.Sprintf("HTTPS lookup failed: %v", err),
+		}}})
+		return
 	}
 
 	if resp.Rcode != mdns.RcodeSuccess {
-		result.Details = "no HTTPS records, consistency check skipped"
-		return []*checker.Result{result}, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
+			Checker: "dns-consistency",
+			Domain:  domain,
+			Passed:  true,
+			Details: "no HTTPS records, consistency check skipped",
+		}}})
+		return
 	}
 
 	var httpsRecords []*mdns.HTTPS
@@ -172,11 +200,16 @@ func ConsistencyCheck(domain string, resolver *Resolver) ([]*checker.Result, err
 	}
 
 	if len(httpsRecords) == 0 {
-		result.Details = "no HTTPS records, consistency check skipped"
-		return []*checker.Result{result}, nil
+		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
+			Checker: "dns-consistency",
+			Domain:  domain,
+			Passed:  true,
+			Details: "no HTTPS records, consistency check skipped",
+		}}})
+		return
 	}
 
-	// 3. Analyze each HTTPS record — return separate results
+	// 3. Analyze each HTTPS record
 	var results []*checker.Result
 
 	for i, h := range httpsRecords {
@@ -199,7 +232,7 @@ func ConsistencyCheck(domain string, resolver *Resolver) ([]*checker.Result, err
 		results = append(results, recResult)
 	}
 
-	return results, nil
+	stats.AddRunResult(checker.RunResult{Domain: domain, Results: results})
 }
 
 // applyResult sets the result fields based on analyzeResult
@@ -340,5 +373,3 @@ func hasOverlap(a, b []string) bool {
 	}
 	return false
 }
-
-

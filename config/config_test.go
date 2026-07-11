@@ -37,12 +37,6 @@ dns:
 web:
   http: redirect
   https: any
-aliases:
-  - name: www.example.com
-    dns:
-      a: yes
-    web:
-      http: direct
 `
 	tmpFile, err := os.CreateTemp("", "config-*.yaml")
 	if err != nil {
@@ -83,18 +77,6 @@ aliases:
 	}
 	if cfg.Web.HTTPS != HTTPAny {
 		t.Errorf("Web.HTTPS = %q, want %q", cfg.Web.HTTPS, HTTPAny)
-	}
-	if len(cfg.Aliases) != 1 {
-		t.Fatalf("len(Aliases) = %d, want 1", len(cfg.Aliases))
-	}
-	if cfg.Aliases[0].Name != "www.example.com" {
-		t.Errorf("Alias[0].Name = %q, want %q", cfg.Aliases[0].Name, "www.example.com")
-	}
-	if cfg.Aliases[0].Web == nil {
-		t.Fatal("Alias[0].Web is nil")
-	}
-	if cfg.Aliases[0].Web.HTTP != HTTPDirect {
-		t.Errorf("Alias[0].Web.HTTP = %q, want %q", cfg.Aliases[0].Web.HTTP, HTTPDirect)
 	}
 }
 

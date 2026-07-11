@@ -6,12 +6,3 @@ dns:
 web:
   http: redirect
   https: any
-aliases:
-  - name: www.example.com
-    dns:
-      a: yes
-      aaaa: yes
-      https: no
-    web:
-      http: redirect
-      https: any

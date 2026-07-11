@@ -86,7 +86,7 @@
 
 ## Формат конфигурации
 
-Один файл = один домен с алиасами.
+Один файл = один домен.
 
 ```yaml
 name: example.com
@@ -97,16 +97,6 @@ dns:
 web:
   http: redirect  # порт 80: redirect (301/302) или direct (200)
   https: true     # проверять HTTPS (HTTP/2, HTTP/3 автоматически)
-
-aliases:
-  - name: www.example.com
-    dns:
-      a: yes
-      aaaa: yes
-      https: no
-    web:
-      http: redirect
-      https: true
 ```
 
 ### DNS записи

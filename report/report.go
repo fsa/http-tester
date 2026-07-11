@@ -1,14 +1,10 @@
 package report
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
-	"http-tester/checker/teststats"
-
-	"gopkg.in/yaml.v3"
+	"http-tester/checker"
 )
 
 const (
@@ -60,73 +56,30 @@ type JSONSummary struct {
 	ExitCode int `json:"exit_code" yaml:"exit_code"`
 }
 
-func Print(stats *teststats.Stats, resolver string, startTime time.Time, format string) int {
-	switch format {
-	case "json":
-		return printJSON(stats, resolver, startTime, false)
-	case "json-pretty", "json_pretty", "json-verbose":
-		return printJSON(stats, resolver, startTime, true)
-	case "yaml", "yml":
-		return printYAML(stats, resolver, startTime)
-	default:
-		return printText(stats, resolver)
-	}
+type Formatter interface {
+	Print(stats *checker.Stats, resolver string, startTime time.Time) int
 }
 
-func printText(stats *teststats.Stats, resolver string) int {
-	if resolver != "" {
-		fmt.Fprintf(os.Stdout, "\n%sResolver%s: %s\n", colorCyan, colorReset, resolver)
-	}
-
-	for _, r := range stats.Results {
-		fmt.Fprintf(os.Stdout, "\n%s===%s %s %s===%s\n", colorCyan, colorReset, r.Domain, colorCyan, colorReset)
-		for _, res := range r.Results {
-			var status string
-			if res.Info {
-				status = colorWhite + "INFO" + colorReset
-			} else if res.Warning {
-				status = colorYellow + "WARN" + colorReset
-			} else if res.Error {
-				status = colorRed + "ERROR" + colorReset
-			} else if res.Passed {
-				status = colorGreen + "PASS" + colorReset
-			} else {
-				status = colorRed + "FAIL" + colorReset
-			}
-			fmt.Fprintf(os.Stdout, "  [%s] %s: %s\n", status, res.Checker, res.Details)
-			if res.RedirectTo != "" {
-				fmt.Fprintf(os.Stdout, "         -> %s\n", res.RedirectTo)
-			}
-			if res.AltSvc != "" {
-				fmt.Fprintf(os.Stdout, "         Alt-Svc header found: %s\n", res.AltSvc)
-			}
-			for _, rec := range res.Records {
-				fmt.Fprintf(os.Stdout, "         %s %s\n", rec.Type, rec.Value)
-			}
-		}
-	}
-
-	fmt.Fprintf(os.Stdout, "\n%s--- Summary ---\n", colorCyan)
-	if stats.Total == stats.Passed {
-		fmt.Fprintf(os.Stdout, "%sAll %d check(s) passed%s\n", colorGreen, stats.Total, colorReset)
-	} else {
-		fmt.Fprintf(os.Stdout, "%s%d passed%s, %s%d failed%s", colorGreen, stats.Passed, colorReset, colorRed, stats.Failed, colorReset)
-		if stats.Errors > 0 {
-			fmt.Fprintf(os.Stdout, ", %s%d error(s)%s", colorRed, stats.Errors, colorReset)
-		}
-		fmt.Fprintln(os.Stdout)
-	}
-	if stats.Warnings > 0 {
-		fmt.Fprintf(os.Stdout, "%s%d warning(s)%s\n", colorYellow, stats.Warnings, colorReset)
-	}
-	if stats.Info > 0 {
-		fmt.Fprintf(os.Stdout, "%s%d info(s)%s\n", colorWhite, stats.Info, colorReset)
-	}
-
-	return stats.Code()
+var formatters = map[string]Formatter{
+	"text":        &TextFormatter{},
+	"json":        &JSONFormatter{Pretty: false},
+	"json-pretty": &JSONFormatter{Pretty: true},
+	"json_pretty": &JSONFormatter{Pretty: true},
+	"json-verbose": &JSONFormatter{Pretty: true},
+	"yaml":        &YAMLFormatter{},
+	"yml":         &YAMLFormatter{},
 }
 
-func buildReport(stats *teststats.Stats, resolver string, startTime time.Time) JSONReport {
+func Print(format string, stats *checker.Stats, resolver string, startTime time.Time) error {
+	f, ok := formatters[format]
+	if !ok {
+		return fmt.Errorf("unknown format: %q (available: text, json, json-pretty, yaml)", format)
+	}
+	f.Print(stats, resolver, startTime)
+	return nil
+}
+
+func buildReport(stats *checker.Stats, resolver string, startTime time.Time) JSONReport {
 	report := JSONReport{
 		Timestamp: startTime.Format(time.RFC3339),
 		Resolver:  resolver,
@@ -158,41 +111,14 @@ func buildReport(stats *teststats.Stats, resolver string, startTime time.Time) J
 	}
 
 	report.Summary = JSONSummary{
-		Total:    stats.Total,
-		Passed:   stats.Passed,
-		Failed:   stats.Failed,
-		Errors:   stats.Errors,
-		Warnings: stats.Warnings,
-		Info:     stats.Info,
+		Total:    stats.Total(),
+		Passed:   stats.Passed(),
+		Failed:   stats.Failed(),
+		Errors:   stats.Errors(),
+		Warnings: stats.Warnings(),
+		Info:     stats.Info(),
 		ExitCode: stats.Code(),
 	}
 
 	return report
-}
-
-func printJSON(stats *teststats.Stats, resolver string, startTime time.Time, pretty bool) int {
-	report := buildReport(stats, resolver, startTime)
-
-	var data []byte
-	if pretty {
-		data, _ = json.MarshalIndent(report, "", "  ")
-	} else {
-		data, _ = json.Marshal(report)
-	}
-	fmt.Fprintln(os.Stdout, string(data))
-
-	return report.Summary.ExitCode
-}
-
-func printYAML(stats *teststats.Stats, resolver string, startTime time.Time) int {
-	report := buildReport(stats, resolver, startTime)
-
-	data, err := yaml.Marshal(report)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "YAML marshal error: %v\n", err)
-		return 1
-	}
-	fmt.Fprint(os.Stdout, string(data))
-
-	return report.Summary.ExitCode
 }

@@ -10,7 +10,6 @@ import (
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
-	"http-tester/checker/teststats"
 	httpchecker "http-tester/checker/web"
 	"http-tester/config"
 	"http-tester/report"
@@ -123,18 +122,15 @@ func main() {
 		printPlan(cfg)
 	}
 
-	stats := &teststats.Stats{}
+	stats := &checker.Stats{}
 
-	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6)
-	stats.AddRunResult(rr)
+	runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6, stats)
 
-	for _, alias := range cfg.Aliases {
-		arr := runDomain(alias.Name, alias.DNS, alias.HasDNS, alias.Web, alias.HasWeb, resolverAddr, localIPv4, localIPv6)
-		stats.AddRunResult(arr)
+	if err := report.Print(format, stats, resolverAddr, startTime); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
-
-	exitCode := report.Print(stats, resolverAddr, startTime, format)
-	os.Exit(exitCode)
+	os.Exit(stats.Code())
 }
 
 func printPlan(cfg *config.DomainConfig) {
@@ -172,46 +168,10 @@ func printPlan(cfg *config.DomainConfig) {
 		fmt.Fprintf(os.Stderr, "  Web: HTTP(%s), HTTPS(%s)\n", httpMode, httpsMode)
 	}
 
-	for _, alias := range cfg.Aliases {
-		fmt.Fprintf(os.Stderr, "\n\033[36mAlias: %s\033[0m\n", alias.Name)
-		if alias.HasDNS {
-			parts := []string{}
-			if alias.DNS != nil {
-				if alias.DNS.A != "" {
-					parts = append(parts, fmt.Sprintf("A(%s)", alias.DNS.A))
-				}
-				if alias.DNS.AAAA != "" {
-					parts = append(parts, fmt.Sprintf("AAAA(%s)", alias.DNS.AAAA))
-				}
-				if alias.DNS.HTTPS != "" {
-					parts = append(parts, fmt.Sprintf("HTTPS(%s)", alias.DNS.HTTPS))
-				}
-			}
-			if len(parts) > 0 {
-				fmt.Fprintf(os.Stderr, "  DNS: %s\n", strings.Join(parts, ", "))
-			}
-		}
-		if alias.HasWeb {
-			httpMode := "any"
-			httpsMode := "any"
-			if alias.Web != nil {
-				if alias.Web.HTTP != "" {
-					httpMode = string(alias.Web.HTTP)
-				}
-				if alias.Web.HTTPS != "" {
-					httpsMode = string(alias.Web.HTTPS)
-				}
-			}
-			fmt.Fprintf(os.Stderr, "  Web: HTTP(%s), HTTPS(%s)\n", httpMode, httpsMode)
-		}
-	}
-
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string, localIPv4, localIPv6 bool) checker.RunResult {
-	rr := checker.RunResult{Domain: domain}
-
+func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string, localIPv4, localIPv6 bool, stats *checker.Stats) {
 	resolver := dns.NewResolver(resolverAddr)
 
 	var dnsResult *dns.DNSResult
@@ -223,101 +183,17 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 			c := dns.New(resolver)
 			c.A = dnsChecks.A
 			c.AAAA = dnsChecks.AAAA
-			results, result, err := c.Check(domain)
-			if err != nil {
-				results = []*checker.Result{{
-					Checker: c.Name(),
-					Domain:  domain,
-					Passed:  false,
-					Error:   true,
-					Details: fmt.Sprintf("error: %v", err),
-				}}
-			} else {
-				dnsResult = result
-			}
-			rr.Results = append(rr.Results, results...)
+			dnsResult = c.Check(domain, stats)
 		}
 
 		// HTTPS record check
 		if dnsChecks.HTTPS != "" {
 			c := dns.NewHTTPSChecker(resolver)
-			results, err := c.Check(domain)
-			if err != nil {
-				results = []*checker.Result{{
-					Checker: c.Name(),
-					Domain:  domain,
-					Passed:  false,
-					Error:   true,
-					Details: fmt.Sprintf("error: %v", err),
-				}}
-			} else {
-				// Check if HTTPS records were found
-				for _, r := range results {
-					if len(r.Records) > 0 {
-						httpsRecordExists = true
-						break
-					}
-				}
+			httpsRecordExists = c.Check(domain, dnsChecks.HTTPS, stats)
 
-				if dnsChecks.HTTPS == config.DNSNo {
-					for _, r := range results {
-						if r.Passed && len(r.Records) > 0 {
-							r.Passed = false
-							r.Details = fmt.Sprintf("HTTPS records found but not expected: %d record(s)", len(r.Records))
-						} else if !r.Passed && len(r.Records) == 0 {
-							r.Passed = true
-							r.Details = "no HTTPS records (expected)"
-						}
-					}
-				} else if dnsChecks.HTTPS == config.DNSOptional {
-					httpsFound := false
-					for _, r := range results {
-						if r.Passed && len(r.Records) > 0 {
-							httpsFound = true
-							r.Details = fmt.Sprintf("found %d HTTPS record(s) (optional)", len(r.Records))
-						} else if !r.Passed && !r.Error {
-							// No records but no error — mark as passed for optional
-							r.Passed = true
-							r.Details = "no HTTPS records (optional)"
-						}
-					}
-					if httpsFound {
-						consResults, err := dns.ConsistencyCheck(domain, resolver)
-						if err != nil {
-							consResults = []*checker.Result{{
-								Checker: "dns-consistency",
-								Domain:  domain,
-								Passed:  false,
-								Error:   true,
-								Details: fmt.Sprintf("error: %v", err),
-							}}
-						}
-						results = append(results, consResults...)
-					}
-				} else {
-					httpsPassed := false
-					for _, r := range results {
-						if r.Passed {
-							httpsPassed = true
-							break
-						}
-					}
-					if httpsPassed {
-						consResults, err := dns.ConsistencyCheck(domain, resolver)
-						if err != nil {
-							consResults = []*checker.Result{{
-								Checker: "dns-consistency",
-								Domain:  domain,
-								Passed:  false,
-								Error:   true,
-								Details: fmt.Sprintf("error: %v", err),
-							}}
-						}
-						results = append(results, consResults...)
-					}
-				}
+			if (dnsChecks.HTTPS == config.DNSOptional || dnsChecks.HTTPS == config.DNSYes) && httpsRecordExists {
+				dns.ConsistencyCheck(domain, resolver, stats)
 			}
-			rr.Results = append(rr.Results, results...)
 		}
 	}
 
@@ -352,31 +228,27 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 		// Warn when multiple IPs exist but test_all_ips is off
 		if !testAllIPs {
 			if len(ipv4s) > 1 {
-				rr.Results = append(rr.Results, &checker.Result{
+				stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 					Checker: "web-info",
 					Domain:  domain,
 					Passed:  true,
 					Warning: true,
 					Details: fmt.Sprintf("Found %d IPv4 addresses, testing only system-selected (%s). Set test_all_ips: true to test all.", len(ipv4s), ipv4s[0]),
-				})
+				}}})
 			}
 			if len(ipv6s) > 1 {
-				rr.Results = append(rr.Results, &checker.Result{
+				stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 					Checker: "web-info",
 					Domain:  domain,
 					Passed:  true,
 					Warning: true,
 					Details: fmt.Sprintf("Found %d IPv6 addresses, testing only system-selected (%s). Set test_all_ips: true to test all.", len(ipv6s), ipv6s[0]),
-				})
+				}}})
 			}
 		}
 
-		results := httpchecker.RunAutoChecks(domain, ipv4s, ipv6s, testAllIPs, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, localIPv4, localIPv6)
-
-		rr.Results = append(rr.Results, results...)
+		httpchecker.RunAutoChecks(domain, ipv4s, ipv6s, testAllIPs, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, localIPv4, localIPv6, stats)
 	}
-
-	return rr
 }
 
 

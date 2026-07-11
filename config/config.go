@@ -85,21 +85,12 @@ func (w *WebChecks) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-type AliasConfig struct {
+type DomainConfig struct {
 	Name   string     `yaml:"name"`
 	DNS    *DNSChecks `yaml:"dns,omitempty"`
 	HasDNS bool       `yaml:"-"`
 	Web    *WebChecks `yaml:"web,omitempty"`
 	HasWeb bool       `yaml:"-"`
-}
-
-type DomainConfig struct {
-	Name    string        `yaml:"name"`
-	DNS     *DNSChecks    `yaml:"dns,omitempty"`
-	HasDNS  bool          `yaml:"-"`
-	Web     *WebChecks    `yaml:"web,omitempty"`
-	HasWeb  bool          `yaml:"-"`
-	Aliases []AliasConfig `yaml:"aliases,omitempty"`
 }
 
 // UnmarshalYAML for DomainConfig to detect dns: and web: key presence
@@ -122,32 +113,6 @@ func (d *DomainConfig) UnmarshalYAML(value *yaml.Node) error {
 			}
 			if key == "web" {
 				d.HasWeb = true
-			}
-		}
-	}
-	return nil
-}
-
-// UnmarshalYAML for AliasConfig to detect dns: and web: key presence
-func (a *AliasConfig) UnmarshalYAML(value *yaml.Node) error {
-	type Alias AliasConfig
-	var al Alias
-	if err := value.Decode(&al); err != nil {
-		return err
-	}
-	*a = AliasConfig(al)
-
-	if value.Kind == yaml.MappingNode {
-		for i := 0; i < len(value.Content)-1; i += 2 {
-			key := value.Content[i].Value
-			if key == "dns" {
-				a.HasDNS = true
-				if a.DNS == nil {
-					a.DNS = &DNSChecks{A: DNSOptional, AAAA: DNSOptional, HTTPS: DNSOptional}
-				}
-			}
-			if key == "web" {
-				a.HasWeb = true
 			}
 		}
 	}
@@ -204,17 +169,6 @@ func (c *DomainConfig) validate() error {
 	}
 	if err := validateWebChecks(c.Web, "web"); err != nil {
 		return err
-	}
-	for i, alias := range c.Aliases {
-		if alias.Name == "" {
-			return fmt.Errorf("alias #%d: name is required", i+1)
-		}
-		if err := validateDNSChecks(alias.DNS, fmt.Sprintf("aliases[%d].dns", i)); err != nil {
-			return err
-		}
-		if err := validateWebChecks(alias.Web, fmt.Sprintf("aliases[%d].web", i)); err != nil {
-			return err
-		}
 	}
 	return nil
 }

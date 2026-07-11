@@ -25,7 +25,7 @@ const maxBodySize = 512 * 1024 // 512 KB max body size for consistency check
 // - Port 443: HTTP/2 with httpsMode (only if httpsMode != "no")
 // - HTTP/3: only if Alt-Svc h3 detected and httpsMode != "no"
 // When testAllIPs is true, checks are run for every IP; otherwise only the first of each type.
-func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string, localIPv4, localIPv6 bool) []*checker.Result {
+func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string, localIPv4, localIPv6 bool, stats *checker.Stats) {
 	var results []*checker.Result
 
 	// Check local connectivity and add INFO to this domain's results
@@ -144,7 +144,7 @@ func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTT
 		})
 	}
 
-	return results
+	stats.AddRunResult(checker.RunResult{Domain: domain, Results: results})
 }
 
 // checkPort performs a single HTTP/HTTPS check with mode validation
