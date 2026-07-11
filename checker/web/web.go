@@ -32,6 +32,7 @@ func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTT
 	if len(ipv4s) > 0 && !localIPv4 {
 		results = append(results, &checker.Result{
 			Checker: "web-info",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  true,
 			Info:    true,
@@ -42,6 +43,7 @@ func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTT
 	if len(ipv6s) > 0 && !localIPv6 {
 		results = append(results, &checker.Result{
 			Checker: "web-info",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  true,
 			Info:    true,
@@ -109,6 +111,7 @@ func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTT
 	if httpsMode != "no" && hasH3 && httpsCheckMode == "optional" && !httpsRecordExists {
 		results = append(results, &checker.Result{
 			Checker: "dns-https-info",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  true,
 			Info:    true,
@@ -120,6 +123,7 @@ func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTT
 	if httpsMode != "no" && httpsRecordExists && !hasH3 {
 		results = append(results, &checker.Result{
 			Checker: "http-alt-svc-warn",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  false,
 			Warning: true,
@@ -138,6 +142,7 @@ func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTT
 	if len(results) == 0 {
 		results = append(results, &checker.Result{
 			Checker: "http",
+			Group:   "HTTP",
 			Domain:  domain,
 			Passed:  false,
 			Details: "no reachable IP found",
@@ -154,8 +159,24 @@ func checkPort(domain, ipVer, ip string, port int, scheme, protocol, mode string
 		checkerName = fmt.Sprintf("%s-%s", scheme, ipVer)
 	}
 
+	group := "HTTP"
+	if scheme == "https" {
+		group = "HTTPS"
+	}
+
+	ipTag := "ipv4"
+	if strings.Contains(ipVer, "ipv6") {
+		ipTag = "ipv6"
+	}
+	tags := []string{ipTag}
+	if scheme == "https" {
+		tags = []string{protocol, ipTag}
+	}
+
 	result := &checker.Result{
 		Checker: checkerName,
+		Group:   group,
+		Tags:    tags,
 		Domain:  domain,
 		Passed:  false,
 	}
@@ -224,7 +245,7 @@ func checkPort(domain, ipVer, ip string, port int, scheme, protocol, mode string
 		result.Passed = isOK
 	}
 
-	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
+	result.Details = fmt.Sprintf("%s -> %s", u.String(), resp.Status)
 	result.HTTPVersion = resp.Proto
 	if loc := resp.Header.Get("Location"); loc != "" {
 		result.RedirectTo = loc
@@ -243,6 +264,8 @@ func checkPort(domain, ipVer, ip string, port int, scheme, protocol, mode string
 func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 	result := &checker.Result{
 		Checker: fmt.Sprintf("https-http3-%s", ipVer),
+		Group:   "HTTPS",
+		Tags:    []string{"http3", ipVer},
 		Domain:  domain,
 		Passed:  false,
 	}
@@ -291,7 +314,7 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 	defer resp.Body.Close()
 
 	result.Passed = resp.StatusCode >= 200 && resp.StatusCode < 400
-	result.Details = fmt.Sprintf("%s %s -> %s", result.Checker, u.String(), resp.Status)
+	result.Details = fmt.Sprintf("%s -> %s", u.String(), resp.Status)
 	result.HTTPVersion = resp.Proto
 	if loc := resp.Header.Get("Location"); loc != "" {
 		result.RedirectTo = loc
@@ -405,6 +428,7 @@ func CheckConsistency(results []*checker.Result) []*checker.Result {
 			if similarity < 0.60 || sizeRatio > 3.0 {
 				warnings = append(warnings, &checker.Result{
 					Checker: "consistency",
+					Group:   "Consistency",
 					Domain:  entries[i].checker,
 					Passed:  false,
 					Warning: true,
@@ -457,6 +481,7 @@ func CheckStatusConsistency(results []*checker.Result) []*checker.Result {
 		}
 		warnings = append(warnings, &checker.Result{
 			Checker: "http-status-consistency",
+			Group:   "Consistency",
 			Domain:  "",
 			Passed:  false,
 			Warning: true,
@@ -473,6 +498,7 @@ func CheckStatusConsistency(results []*checker.Result) []*checker.Result {
 		}
 		warnings = append(warnings, &checker.Result{
 			Checker: "https-status-consistency",
+			Group:   "Consistency",
 			Domain:  "",
 			Passed:  false,
 			Warning: true,

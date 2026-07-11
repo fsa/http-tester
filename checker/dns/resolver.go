@@ -18,29 +18,77 @@ type Resolver struct {
 	client *mdns.Client
 }
 
-// NewResolver creates a resolver.
+// NewResolver creates a resolver and verifies it is reachable.
 // addr is an optional DNS server address (IPv4 or IPv6, with or without brackets).
 // If a port is included, it's used; otherwise defaults to 53.
 // If addr is empty, the first nameserver from /etc/resolv.conf is used.
-func NewResolver(addr string) *Resolver {
+// Returns an error if the address is invalid or the server is unreachable.
+func NewResolver(addr string) (*Resolver, error) {
 	r := &Resolver{
 		client: &mdns.Client{Timeout: 5 * time.Second},
 	}
 	if addr != "" {
-		r.server = normalizeAddr(addr)
+		parsed, err := parseAddr(addr)
+		if err != nil {
+			return nil, err
+		}
+		r.server = parsed
 	} else {
 		r.server = systemNameserver()
 	}
-	return r
+
+	// Verify the resolver is reachable
+	if err := r.probe(); err != nil {
+		return nil, fmt.Errorf("resolver %s: %w", r.server, err)
+	}
+
+	return r, nil
 }
 
-// normalizeAddr parses a resolver address: strips brackets, adds port 53 if missing.
-func normalizeAddr(addr string) string {
-	if _, _, err := net.SplitHostPort(addr); err == nil {
-		return addr
+// parseAddr validates and normalizes a resolver address.
+// Returns "host:port" or an error if the address is invalid.
+func parseAddr(addr string) (string, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// No port — treat entire string as host, default port 53
+		host = strings.Trim(addr, "[]")
+		if net.ParseIP(host) == nil {
+			return "", fmt.Errorf("invalid resolver address: %q is not a valid IP address", addr)
+		}
+		return net.JoinHostPort(host, "53"), nil
 	}
-	host := strings.Trim(addr, "[]")
-	return net.JoinHostPort(host, "53")
+
+	// Has port — validate both host and port
+	if net.ParseIP(host) == nil {
+		return "", fmt.Errorf("invalid resolver address: %q is not a valid IP address", host)
+	}
+	portNum, err := net.LookupPort("udp", port)
+	if err != nil || portNum <= 0 || portNum > 65535 {
+		return "", fmt.Errorf("invalid resolver port: %q", port)
+	}
+	return net.JoinHostPort(host, port), nil
+}
+
+// probe sends a DNS query to verify the resolver can respond.
+func (r *Resolver) probe() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	m := new(mdns.Msg)
+	m.SetQuestion("example.com.", mdns.TypeA)
+	m.RecursionDesired = true
+
+	resp, _, err := r.client.ExchangeContext(ctx, m, r.server)
+	if err != nil {
+		return err
+	}
+	if resp == nil {
+		return fmt.Errorf("no response")
+	}
+	if resp.Rcode != mdns.RcodeSuccess {
+		return fmt.Errorf("unexpected rcode: %d", resp.Rcode)
+	}
+	return nil
 }
 
 // systemNameserver returns the first nameserver from /etc/resolv.conf via miekg/dns.

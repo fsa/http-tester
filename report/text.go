@@ -3,6 +3,7 @@ package report
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"http-tester/checker"
@@ -10,40 +11,102 @@ import (
 
 type TextFormatter struct{}
 
+var tagLabels = map[string]string{
+	"ipv4": "IPv4",
+	"ipv6": "IPv6",
+	"http1": "HTTP/1.1",
+	"http2": "HTTP/2",
+	"http3": "HTTP/3",
+}
+
+func displayTag(tag string) string {
+	if label, ok := tagLabels[tag]; ok {
+		return label
+	}
+	return tag
+}
+
+type testGroup struct {
+	name string
+}
+
+var groups = []testGroup{
+	{"DNS"},
+	{"HTTP"},
+	{"HTTPS"},
+	{"Consistency"},
+}
+
 func (f *TextFormatter) Print(stats *checker.Stats, resolver string, startTime time.Time) int {
+	fmt.Fprintf(os.Stdout, "\n%sTest Results%s\n", colorCyan, colorReset)
+
 	if resolver != "" {
-		fmt.Fprintf(os.Stdout, "\n%sResolver%s: %s\n", colorCyan, colorReset, resolver)
+		fmt.Fprintf(os.Stdout, "%sResolver%s: %s\n", colorCyan, colorReset, resolver)
 	}
 
+	// Collect all results across all RunResults
+	var allResults []*checker.Result
 	for _, r := range stats.Results {
-		fmt.Fprintf(os.Stdout, "\n%s===%s %s %s===%s\n", colorCyan, colorReset, r.Domain, colorCyan, colorReset)
-		for _, res := range r.Results {
-			var status string
-			if res.Info {
-				status = colorWhite + "INFO" + colorReset
-			} else if res.Warning {
-				status = colorYellow + "WARN" + colorReset
-			} else if res.Error {
-				status = colorRed + "ERROR" + colorReset
-			} else if res.Passed {
-				status = colorGreen + "PASS" + colorReset
-			} else {
-				status = colorRed + "FAIL" + colorReset
+		allResults = append(allResults, r.Results...)
+	}
+
+	for _, g := range groups {
+		var groupResults []*checker.Result
+		for _, res := range allResults {
+			if res.Group == g.name {
+				groupResults = append(groupResults, res)
 			}
-			fmt.Fprintf(os.Stdout, "  [%s] %s: %s\n", status, res.Checker, res.Details)
+		}
+		if len(groupResults) == 0 {
+			continue
+		}
+
+		fmt.Fprintf(os.Stdout, "\n  %s%s:%s\n", colorCyan, g.name, colorReset)
+		for _, res := range groupResults {
+			status := f.statusLabel(res)
+			if len(res.Tags) > 0 {
+				var tags []string
+				for _, t := range res.Tags {
+					tags = append(tags, displayTag(t))
+				}
+				fmt.Fprintf(os.Stdout, "    [%s] %s (%s)\n", status, res.Details, strings.Join(tags, ", "))
+			} else {
+				fmt.Fprintf(os.Stdout, "    [%s] %s\n", status, res.Details)
+			}
 			if res.RedirectTo != "" {
-				fmt.Fprintf(os.Stdout, "         -> %s\n", res.RedirectTo)
+				fmt.Fprintf(os.Stdout, "           -> %s\n", res.RedirectTo)
 			}
 			if res.AltSvc != "" {
-				fmt.Fprintf(os.Stdout, "         Alt-Svc header found: %s\n", res.AltSvc)
+				fmt.Fprintf(os.Stdout, "           Alt-Svc: %s\n", res.AltSvc)
 			}
 			for _, rec := range res.Records {
-				fmt.Fprintf(os.Stdout, "         %s %s\n", rec.Type, rec.Value)
+				fmt.Fprintf(os.Stdout, "           %s %s\n", rec.Type, rec.Value)
 			}
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "\n%s--- Summary ---\n", colorCyan)
+	f.printSummary(stats)
+	return stats.Code()
+}
+
+func (f *TextFormatter) statusLabel(res *checker.Result) string {
+	if res.Info {
+		return colorWhite + "INFO" + colorReset
+	}
+	if res.Warning {
+		return colorYellow + "WARN" + colorReset
+	}
+	if res.Error {
+		return colorRed + "ERROR" + colorReset
+	}
+	if res.Passed {
+		return colorGreen + "PASS" + colorReset
+	}
+	return colorRed + "FAIL" + colorReset
+}
+
+func (f *TextFormatter) printSummary(stats *checker.Stats) {
+	fmt.Fprintf(os.Stdout, "\n%s--- Summary ---%s\n", colorCyan, colorReset)
 	total := stats.Total()
 	passed := stats.Passed()
 	if total == passed {
@@ -63,6 +126,4 @@ func (f *TextFormatter) Print(stats *checker.Stats, resolver string, startTime t
 	if stats.Info() > 0 {
 		fmt.Fprintf(os.Stdout, "%s%d info(s)%s\n", colorWhite, stats.Info(), colorReset)
 	}
-
-	return stats.Code()
 }

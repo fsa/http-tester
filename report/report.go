@@ -30,6 +30,8 @@ type JSONDomain struct {
 
 type JSONResult struct {
 	Checker     string       `json:"checker" yaml:"checker"`
+	Group       string       `json:"group" yaml:"group"`
+	Tags        []string     `json:"tags,omitempty" yaml:"tags,omitempty"`
 	Passed      bool         `json:"passed" yaml:"passed"`
 	Warning     bool         `json:"warning,omitempty" yaml:"warning,omitempty"`
 	Info        bool         `json:"info,omitempty" yaml:"info,omitempty"`
@@ -90,6 +92,8 @@ func buildReport(stats *checker.Stats, resolver string, startTime time.Time) JSO
 		for _, res := range r.Results {
 			jr := JSONResult{
 				Checker:     res.Checker,
+				Group:       res.Group,
+				Tags:        res.Tags,
 				Passed:      res.Passed,
 				Warning:     res.Warning,
 				Info:        res.Info,

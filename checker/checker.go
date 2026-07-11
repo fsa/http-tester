@@ -8,6 +8,8 @@ type Record struct {
 
 type Result struct {
 	Checker     string
+	Group       string   // "DNS", "HTTP", "HTTPS", "Consistency"
+	Tags        []string // e.g. ["http2", "ipv4"] or ["ipv4", "1.2.3.4"]
 	Domain      string
 	Passed      bool
 	Warning     bool

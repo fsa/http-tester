@@ -30,6 +30,7 @@ func (c *HTTPSChecker) Check(domain string, mode config.DNSRecordCheck, stats *c
 
 	result := &checker.Result{
 		Checker: "dns-https",
+		Group:   "DNS",
 		Domain:  domain,
 		Passed:  true,
 	}
@@ -44,8 +45,16 @@ func (c *HTTPSChecker) Check(domain string, mode config.DNSRecordCheck, stats *c
 	}
 
 	if resp.Rcode != mdns.RcodeSuccess {
-		result.Passed = false
-		result.Details = "no HTTPS records"
+		// No HTTPS records — apply mode
+		switch mode {
+		case config.DNSYes:
+			result.Passed = false
+			result.Details = "no HTTPS records (expected)"
+		case config.DNSNo:
+			result.Details = "no HTTPS records (expected)"
+		default:
+			result.Details = "no HTTPS records (optional)"
+		}
 		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
 		return false
 	}
@@ -61,8 +70,16 @@ func (c *HTTPSChecker) Check(domain string, mode config.DNSRecordCheck, stats *c
 	}
 
 	if len(result.Records) == 0 {
-		result.Passed = false
-		result.Details = "no HTTPS records in response"
+		// No HTTPS records in response — apply mode
+		switch mode {
+		case config.DNSYes:
+			result.Passed = false
+			result.Details = "no HTTPS records in response (expected)"
+		case config.DNSNo:
+			result.Details = "no HTTPS records in response (expected)"
+		default:
+			result.Details = "no HTTPS records in response (optional)"
+		}
 		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{result}})
 		return false
 	}
@@ -154,6 +171,7 @@ func ConsistencyCheck(domain string, resolver *Resolver, stats *checker.Stats) {
 	if err != nil {
 		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 			Checker: "dns-consistency",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  false,
 			Details: fmt.Sprintf("base resolution failed: %v", err),
@@ -163,6 +181,7 @@ func ConsistencyCheck(domain string, resolver *Resolver, stats *checker.Stats) {
 	if len(a4s) == 0 && len(a6s) == 0 {
 		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 			Checker: "dns-consistency",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  false,
 			Details: "no A/AAAA records for domain",
@@ -175,6 +194,7 @@ func ConsistencyCheck(domain string, resolver *Resolver, stats *checker.Stats) {
 	if err != nil {
 		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 			Checker: "dns-consistency",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  false,
 			Details: fmt.Sprintf("HTTPS lookup failed: %v", err),
@@ -185,6 +205,7 @@ func ConsistencyCheck(domain string, resolver *Resolver, stats *checker.Stats) {
 	if resp.Rcode != mdns.RcodeSuccess {
 		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 			Checker: "dns-consistency",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  true,
 			Details: "no HTTPS records, consistency check skipped",
@@ -202,6 +223,7 @@ func ConsistencyCheck(domain string, resolver *Resolver, stats *checker.Stats) {
 	if len(httpsRecords) == 0 {
 		stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 			Checker: "dns-consistency",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  true,
 			Details: "no HTTPS records, consistency check skipped",
@@ -217,6 +239,7 @@ func ConsistencyCheck(domain string, resolver *Resolver, stats *checker.Stats) {
 
 		recResult := &checker.Result{
 			Checker: "dns-consistency",
+			Group:   "DNS",
 			Domain:  domain,
 			Passed:  true,
 		}

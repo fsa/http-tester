@@ -36,6 +36,7 @@ func (c *DNSChecker) Check(domain string, stats *checker.Stats) *DNSResult {
 
 	result := &checker.Result{
 		Checker: "dns",
+		Group:   "DNS",
 		Domain:  domain,
 		Passed:  true,
 	}

@@ -100,14 +100,6 @@ func main() {
 	// Check local IPv4/IPv6 connectivity before any tests
 	localIPv4, localIPv6 := checkLocalConnectivity()
 
-	// Check resolver reachability if explicitly specified
-	if resolverAddr != "" {
-		if !probeUDP(resolverAddr) {
-			fmt.Fprintf(os.Stderr, "\n\033[31mError:\033[0m specified resolver %s is not reachable\n", resolverAddr)
-			os.Exit(1)
-		}
-	}
-
 	startTime := time.Now()
 
 	// Print plan (only in text mode)
@@ -124,7 +116,10 @@ func main() {
 
 	stats := &checker.Stats{}
 
-	runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6, stats)
+	if err := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6, stats); err != nil {
+		fmt.Fprintf(os.Stderr, "\n\033[31mError:\033[0m %v\n", err)
+		os.Exit(1)
+	}
 
 	if err := report.Print(format, stats, resolverAddr, startTime); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -171,8 +166,11 @@ func printPlan(cfg *config.DomainConfig) {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string, localIPv4, localIPv6 bool, stats *checker.Stats) {
-	resolver := dns.NewResolver(resolverAddr)
+func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string, localIPv4, localIPv6 bool, stats *checker.Stats) error {
+	resolver, err := dns.NewResolver(resolverAddr)
+	if err != nil {
+		return err
+	}
 
 	var dnsResult *dns.DNSResult
 	httpsRecordExists := false
@@ -230,6 +228,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 			if len(ipv4s) > 1 {
 				stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 					Checker: "web-info",
+					Group:   "DNS",
 					Domain:  domain,
 					Passed:  true,
 					Warning: true,
@@ -239,6 +238,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 			if len(ipv6s) > 1 {
 				stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
 					Checker: "web-info",
+					Group:   "DNS",
 					Domain:  domain,
 					Passed:  true,
 					Warning: true,
@@ -249,6 +249,8 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 
 		httpchecker.RunAutoChecks(domain, ipv4s, ipv6s, testAllIPs, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, localIPv4, localIPv6, stats)
 	}
+
+	return nil
 }
 
 
@@ -279,13 +281,4 @@ func checkLocalConnectivity() (hasIPv4, hasIPv6 bool) {
 		}
 	}
 	return hasIPv4, hasIPv6
-}
-
-func probeUDP(addr string) bool {
-	conn, err := net.DialTimeout("udp", addr, 500*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
 }
