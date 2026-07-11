@@ -280,8 +280,12 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 							httpsFound = true
 							r.Details = fmt.Sprintf("found %d HTTPS record(s) (optional)", len(r.Records))
 						} else if !r.Passed {
-							r.Passed = true
-							r.Details = "no HTTPS records (optional)"
+							// Only mark as passed if it's genuinely "no records",
+							// not a connection error
+							if !strings.Contains(r.Details, "lookup failed") {
+								r.Passed = true
+								r.Details = "no HTTPS records (optional)"
+							}
 						}
 					}
 					if httpsFound {
