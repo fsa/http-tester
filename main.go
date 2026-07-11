@@ -6,7 +6,6 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
-	"time"
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
@@ -99,8 +98,6 @@ func main() {
 	// Check local IPv4/IPv6 connectivity before any tests
 	localIPv4, localIPv6 := checkLocalConnectivity()
 
-	startTime := time.Now()
-
 	stats := &checker.Stats{}
 
 	if err := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6, stats); err != nil {
@@ -108,7 +105,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := report.Print(format, stats, cfg, resolverAddr, startTime); err != nil {
+	if err := report.Print(format, stats, cfg, resolverAddr); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

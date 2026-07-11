@@ -29,7 +29,8 @@ func displayTag(tag string) string {
 	return tag
 }
 
-func (f *TextFormatter) Start(cfg *config.DomainConfig, startTime time.Time) {
+func (f *TextFormatter) Start(cfg *config.DomainConfig) {
+	startTime := time.Now()
 	lang, _ := language.Parse(os.Getenv("LANG"))
 	region, _ := lang.Region()
 	dateFmt := "02.01.2006 15:04:05 MST"
@@ -91,7 +92,7 @@ var groups = []testGroup{
 	{"Consistency"},
 }
 
-func (f *TextFormatter) Print(stats *checker.Stats, resolver string, startTime time.Time) int {
+func (f *TextFormatter) Print(stats *checker.Stats, resolver string) int {
 	fmt.Fprintf(os.Stdout, "\n%sTest Results%s\n", colorCyan, colorReset)
 
 	if resolver != "" {

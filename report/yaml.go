@@ -3,7 +3,6 @@ package report
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"http-tester/checker"
 	"http-tester/config"
@@ -13,10 +12,10 @@ import (
 
 type YAMLFormatter struct{}
 
-func (f *YAMLFormatter) Start(cfg *config.DomainConfig, startTime time.Time) {}
+func (f *YAMLFormatter) Start(cfg *config.DomainConfig) {}
 
-func (f *YAMLFormatter) Print(stats *checker.Stats, resolver string, startTime time.Time) int {
-	report := buildReport(stats, resolver, startTime)
+func (f *YAMLFormatter) Print(stats *checker.Stats, resolver string) int {
+	report := buildReport(stats, resolver)
 
 	data, err := yaml.Marshal(report)
 	if err != nil {

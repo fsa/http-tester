@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 
 	"http-tester/checker"
 	"http-tester/config"
@@ -14,10 +13,10 @@ type JSONFormatter struct {
 	Pretty bool
 }
 
-func (f *JSONFormatter) Start(cfg *config.DomainConfig, startTime time.Time) {}
+func (f *JSONFormatter) Start(cfg *config.DomainConfig) {}
 
-func (f *JSONFormatter) Print(stats *checker.Stats, resolver string, startTime time.Time) int {
-	report := buildReport(stats, resolver, startTime)
+func (f *JSONFormatter) Print(stats *checker.Stats, resolver string) int {
+	report := buildReport(stats, resolver)
 
 	var data []byte
 	if f.Pretty {

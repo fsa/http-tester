@@ -60,8 +60,8 @@ type JSONSummary struct {
 }
 
 type Formatter interface {
-	Start(cfg *config.DomainConfig, startTime time.Time)
-	Print(stats *checker.Stats, resolver string, startTime time.Time) int
+	Start(cfg *config.DomainConfig)
+	Print(stats *checker.Stats, resolver string) int
 }
 
 var formatters = map[string]Formatter{
@@ -74,19 +74,19 @@ var formatters = map[string]Formatter{
 	"yml":         &YAMLFormatter{},
 }
 
-func Print(format string, stats *checker.Stats, cfg *config.DomainConfig, resolver string, startTime time.Time) error {
+func Print(format string, stats *checker.Stats, cfg *config.DomainConfig, resolver string) error {
 	f, ok := formatters[format]
 	if !ok {
 		return fmt.Errorf("unknown format: %q (available: text, json, json-pretty, yaml)", format)
 	}
-	f.Start(cfg, startTime)
-	f.Print(stats, resolver, startTime)
+	f.Start(cfg)
+	f.Print(stats, resolver)
 	return nil
 }
 
-func buildReport(stats *checker.Stats, resolver string, startTime time.Time) JSONReport {
+func buildReport(stats *checker.Stats, resolver string) JSONReport {
 	report := JSONReport{
-		Timestamp: startTime.Format(time.RFC3339),
+		Timestamp: time.Now().Format(time.RFC3339),
 		Resolver:  resolver,
 	}
 
