@@ -2,6 +2,7 @@ package dns
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -10,60 +11,101 @@ import (
 	mdns "github.com/miekg/dns"
 )
 
-// Resolver is a DNS resolution service.
-// By default it uses the system resolver (net.Resolver) for all query types.
-// When an explicit resolver address is provided, uses that server for all queries.
+// Resolver resolves DNS records.
+// Without an address: uses the system resolver (net.Resolver) like any Go program.
+// With an address: queries the specified server directly.
 type Resolver struct {
-	system *net.Resolver
-	server string // empty = use system resolver
+	server string // "host:port" or "" for system
 	client *mdns.Client
 }
 
 // NewResolver creates a resolver.
-// When addr is empty, the system resolver is used for all queries.
-// When addr is provided, that server is used for all queries.
+// addr is an optional DNS server address (IPv4 or IPv6, with or without brackets).
+// If a port is included, it's used; otherwise defaults to 53.
 func NewResolver(addr string) *Resolver {
 	r := &Resolver{
-		system: &net.Resolver{PreferGo: true},
 		client: &mdns.Client{Timeout: 5 * time.Second},
 	}
 	if addr != "" {
-		r.server = addr
+		r.server = normalizeAddr(addr)
 	}
 	return r
 }
 
-// detectNameserver finds a DNS server that miekg/dns can reach.
-//
-// On IPv6-only hosts with NAT64/DNS64, external nameservers from
-// resolv.conf (e.g. 1.1.1.1) are unreachable — the system resolver
-// synthesizes AAAA via DNS64, but miekg/dns connects to the raw IP.
-// Local resolvers (systemd-resolved, dnsmasq) handle DNS64 transparently.
-func detectNameserver() string {
-	// 1. Local resolvers first — they handle DNS64/DNSSEC
-	for _, local := range []string{"127.0.0.53:53", "127.0.0.1:53", "[::1]:53"} {
-		if probeUDP(local) {
-			return local
-		}
+// normalizeAddr parses a resolver address: strips brackets, adds port 53 if missing.
+func normalizeAddr(addr string) string {
+	// If it already has a port, return as-is
+	if _, _, err := net.SplitHostPort(addr); err == nil {
+		return addr
 	}
-
-	// 2. Nameservers from resolv.conf — only if directly reachable
-	for _, ns := range resolvConfNameservers() {
-		if probeUDP(ns) {
-			return ns
-		}
-	}
-
-	// 3. Nothing reachable — return local, best effort
-	return "127.0.0.1:53"
+	// No port — add :53
+	host := strings.Trim(addr, "[]")
+	return net.JoinHostPort(host, "53")
 }
 
-func resolvConfNameservers() []string {
+// LookupIPAddr resolves A/AAAA records.
+// System mode: uses net.Resolver (reads /etc/resolv.conf automatically).
+// Server mode: queries the specified server via miekg/dns.
+func (r *Resolver) LookupIPAddr(ctx context.Context, domain string) ([]net.IPAddr, error) {
+	if r.server == "" {
+		return (&net.Resolver{}).LookupIPAddr(ctx, domain)
+	}
+	return r.lookupIPViaServer(ctx, domain)
+}
+
+// lookupIPViaServer resolves A/AAAA via a specific server using miekg/dns.
+func (r *Resolver) lookupIPViaServer(ctx context.Context, domain string) ([]net.IPAddr, error) {
+	var addrs []net.IPAddr
+
+	for _, qtype := range []uint16{mdns.TypeA, mdns.TypeAAAA} {
+		m := new(mdns.Msg)
+		m.SetQuestion(mdns.Fqdn(domain), qtype)
+		m.RecursionDesired = true
+
+		resp, _, err := r.client.ExchangeContext(ctx, m, r.server)
+		if err != nil {
+			continue
+		}
+		for _, rr := range resp.Answer {
+			switch v := rr.(type) {
+			case *mdns.A:
+				addrs = append(addrs, net.IPAddr{IP: v.A})
+			case *mdns.AAAA:
+				addrs = append(addrs, net.IPAddr{IP: v.AAAA})
+			}
+		}
+	}
+
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("no A/AAAA records for %s", domain)
+	}
+	return addrs, nil
+}
+
+// LookupHTTPS sends a DNS HTTPS (type 65) query.
+// System mode: uses the first nameserver from /etc/resolv.conf via miekg/dns
+// (Go's net.Resolver does not support type 65).
+// Server mode: queries the specified server directly.
+func (r *Resolver) LookupHTTPS(ctx context.Context, domain string) (*mdns.Msg, error) {
+	m := new(mdns.Msg)
+	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
+	m.RecursionDesired = true
+
+	server := r.server
+	if server == "" {
+		server = systemNameserver()
+	}
+
+	resp, _, err := r.client.ExchangeContext(ctx, m, server)
+	return resp, err
+}
+
+// systemNameserver returns the first nameserver from /etc/resolv.conf.
+func systemNameserver() string {
 	data, err := os.ReadFile("/etc/resolv.conf")
 	if err != nil {
-		return nil
+		return "127.0.0.1:53"
 	}
-	var servers []string
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "nameserver") {
@@ -80,57 +122,12 @@ func resolvConfNameservers() []string {
 		if !strings.Contains(ns, ":") {
 			ns = ns + ":53"
 		}
-		servers = append(servers, ns)
+		return ns
 	}
-	return servers
-}
-
-func probeUDP(addr string) bool {
-	conn, err := net.DialTimeout("udp", addr, 500*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
-}
-
-// LookupIPAddr resolves A/AAAA records using Go standard library.
-func (r *Resolver) LookupIPAddr(ctx context.Context, domain string) ([]net.IPAddr, error) {
-	return r.system.LookupIPAddr(ctx, domain)
-}
-
-// LookupHTTPS sends a DNS HTTPS (type 65) query.
-// When an explicit resolver is configured, queries it directly via miekg/dns.
-// Otherwise uses the system resolver, falling back to detected nameservers
-// if the system resolver cannot handle type 65 queries.
-func (r *Resolver) LookupHTTPS(ctx context.Context, domain string) (*mdns.Msg, error) {
-	m := new(mdns.Msg)
-	m.SetQuestion(mdns.Fqdn(domain), mdns.TypeHTTPS)
-	m.RecursionDesired = true
-
-	if r.server != "" {
-		resp, _, err := r.client.ExchangeContext(ctx, m, r.server)
-		return resp, err
-	}
-
-	// System resolver path: try a regular lookup first to confirm reachability,
-	// then send the type 65 query via miekg/dns through detected nameservers.
-	// Go's net.Resolver does not support arbitrary DNS types.
-	_, err := r.system.LookupIPAddr(ctx, domain)
-	if err == nil {
-		server := detectNameserver()
-		resp, _, err := r.client.ExchangeContext(ctx, m, server)
-		return resp, err
-	}
-
-	// System resolver unreachable — fall back entirely to detected nameserver
-	server := detectNameserver()
-	resp, _, err := r.client.ExchangeContext(ctx, m, server)
-	return resp, err
+	return "127.0.0.1:53"
 }
 
 // Server returns the DNS server address used for queries.
-// Returns "system" when using the system resolver (no explicit address).
 func (r *Resolver) Server() string {
 	if r.server == "" {
 		return "system"
