@@ -51,11 +51,19 @@ func printVersion() {
 }
 
 func main() {
-	resolver := flag.StringP("resolver", "r", "", "DNS resolver address (e.g. 8.8.8.8 or 2001:4860:4860::8888)")
-	port := flag.StringP("port", "p", "53", "DNS resolver port")
-	format := flag.StringP("format", "f", "text", "output format: text, json, json-pretty, yaml")
-	configFile := flag.StringP("config", "c", "", "config file path")
-	showVersion := flag.BoolP("version", "V", false, "print version and exit")
+	var (
+		resolver    string
+		port        string
+		format      string
+		configFile  string
+		showVersion bool
+	)
+
+	flag.StringVarP(&resolver, "resolver", "r", "", "DNS resolver address (e.g. 8.8.8.8 or 2001:4860:4860::8888)")
+	flag.StringVarP(&port, "port", "p", "53", "DNS resolver port")
+	flag.StringVarP(&format, "format", "f", "text", "output format: text, json, json-pretty, yaml")
+	flag.StringVarP(&configFile, "config", "c", "", "config file path")
+	flag.BoolVarP(&showVersion, "version", "V", false, "print version and exit")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] <domain>\n", os.Args[0])
@@ -66,17 +74,17 @@ func main() {
 
 	flag.Parse()
 
-	if *showVersion {
+	if showVersion {
 		printVersion()
 		return
 	}
 
 	var cfg *config.DomainConfig
 
-	if *configFile != "" {
+	if configFile != "" {
 		// Config mode: load from file
 		var err error
-		cfg, err = config.LoadDomain(*configFile)
+		cfg, err = config.LoadDomain(configFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
@@ -104,9 +112,9 @@ func main() {
 
 	// Build resolver address from host + port
 	var resolverAddr string
-	if *resolver != "" {
-		host := strings.Trim(*resolver, "[]")
-		resolverAddr = net.JoinHostPort(host, *port)
+	if resolver != "" {
+		host := strings.Trim(resolver, "[]")
+		resolverAddr = net.JoinHostPort(host, port)
 	}
 
 	// Check local IPv4/IPv6 connectivity before any tests
@@ -123,7 +131,7 @@ func main() {
 	startTime := time.Now()
 
 	// Print plan (only in text mode)
-	if *format == "text" || *format == "" {
+	if format == "text" {
 		lang, _ := language.Parse(os.Getenv("LANG"))
 		region, _ := lang.Region()
 		dateFmt := "02.01.2006 15:04:05 MST"
@@ -144,7 +152,7 @@ func main() {
 		allResults = append(allResults, arr)
 	}
 
-	exitCode := report.Print(allResults, resolverAddr, startTime, *format)
+	exitCode := report.Print(allResults, resolverAddr, startTime, format)
 	os.Exit(exitCode)
 }
 
