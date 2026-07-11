@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"time"
 
@@ -44,31 +43,13 @@ func normalizeAddr(addr string) string {
 	return net.JoinHostPort(host, "53")
 }
 
-// systemNameserver returns the first nameserver from /etc/resolv.conf.
+// systemNameserver returns the first nameserver from /etc/resolv.conf via miekg/dns.
 func systemNameserver() string {
-	data, err := os.ReadFile("/etc/resolv.conf")
-	if err != nil {
+	cfg, err := mdns.ClientConfigFromFile("/etc/resolv.conf")
+	if err != nil || len(cfg.Servers) == 0 {
 		return "127.0.0.1:53"
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "nameserver") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		ns := fields[1]
-		if strings.Contains(ns, ":") && !strings.HasPrefix(ns, "[") {
-			ns = "[" + ns + "]"
-		}
-		if !strings.Contains(ns, ":") {
-			ns = ns + ":53"
-		}
-		return ns
-	}
-	return "127.0.0.1:53"
+	return net.JoinHostPort(cfg.Servers[0], cfg.Port)
 }
 
 // LookupIPAddr resolves A/AAAA records.
