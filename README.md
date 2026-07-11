@@ -10,34 +10,29 @@
 
 ## Что проверяет
 
-### 🌐 DNS HTTPS RR (RFC 9460)
+### DNS HTTPS RR (RFC 9460)
 
 - Валидация HTTPS-записей (ServiceMode / AliasMode)
 - Проверка параметров alpn (h2, h3)
 - Кросс-проверка ipv4hint/ipv6hint с A/AAAA записями
 
-### 🚀 HTTP/2 и HTTP/3
+### HTTP/2 и HTTP/3
 
 - Фактические сетевые запросы по TCP (HTTP/2) и UDP/QUIC (HTTP/3)
 - Проверка реальной поддержки протоколов, а не только декларации
 - Тестирование доступности по IPv4 и IPv6 при их поддержке сайтом
 
-### 🔄 Согласованность DNS и сервера
+### Согласованность
 
 - Проверка Alt-Svc заголовков vs HTTPS DNS записи
-- Выявление рассинхронизации между конфигурациями
+- Сравнение контента страниц по разным протоколам
+- Проверка согласованности HTTP-статусов
 
-### 📊 Согласованность ответов
-
-- **Содержимое**: сравнение контента страниц по разным протоколам (IPv4/IPv6, HTTP/HTTPS, HTTP/2/HTTP/3)
-- **Статусы**: проверка что все HTTP-ответы возвращают одинаковый статус, и все HTTPS-ответы возвращают одинаковый статус
-- Устойчивость к A/B тестированию и локализации
-
-### 📡 Дополнительно
+### Тестирование всех IP
 
 - Проверка A/AAAA записей с режимами yes/no/optional
+- Опция `test_all_ips` для проверки каждого найденного IP-адреса
 - Автоматическое определение IPv4/IPv6 возможностей
-- Предупреждения при нарушениях best practices
 
 ## Использование
 
@@ -46,42 +41,53 @@
 ./http-tester [опции] -c <config.yaml>
 ```
 
-По умолчанию принимает имя домена для быстрой проверки. Файл конфигурации передаётся через `-c`.
-
 ### Опции
 
 | Длинная | Короткая | Описание |
 |---------|----------|----------|
 | `--config <файл>` | `-c` | Файл конфигурации |
-| `--resolver <адрес>` | `-r` | DNS резолвер (IPv4/IPv6 адрес без порта) |
+| `--resolver <адрес>` | `-r` | DNS резолвер |
 | `--port <порт>` | `-p` | Порт резольвера (по умолчанию 53) |
-| `--format <формат>` | `-f` | Формат вывода: `text`, `json`, `json-pretty`, `yaml` |
+| `--format <формат>` | `-f` | Формат вывода: `text`, `json`, `yaml` |
+| `--version` | `-V` | Версия и выход |
+
+### Переопределение конфигурации
+
+CLI-параметры имеют приоритет над конфиг-файлом и дефолтами: **CLI > конфиг-файл > дефолты**.
+
+```bash
+# Параметры DNS
+--dns.a <value>          yes/no/optional
+--dns.aaaa <value>       yes/no/optional
+--dns.https <value>      yes/no/optional
+
+# Параметры веб-сервера
+--web.http <value>       any/redirect/direct/no
+--web.https <value>      any/redirect/direct/no
+--web.test-all-ips       проверять все найденные IP
+```
 
 ### Примеры
 
 ```bash
-# Быстрый тест домена (по умолчанию)
+# Быстрый тест домена
 ./http-tester example.com
-./http-tester tavda.info -f json
 
 # С конфигом
 ./http-tester -c config.yaml
 
-# С кастомным резолвером (порт 53 по умолчанию)
+# С кастомным резолвером
 ./http-tester -r 8.8.8.8 example.com
 
-# С кастомным резолвером и явным портом
-./http-tester -r 8.8.8.8 -p 5353 -c config.yaml
+# Переопределение параметров конфига через CLI
+./http-tester -c tavda.net.yaml --dns.https yes --web.http redirect
 
-# IPv6 резолвер
-./http-tester -r 2001:4860:4860::8888 example.com
+# Проверка всех IP-адресов
+./http-tester --web.test-all-ips example.com
 
-# IPv6 резолвер в квадратных скобках
-./http-tester -r [2001:4860:4860::8888] example.com
-
-# Порядок аргументов произвольный
-./http-tester example.com -f json
-./http-tester -f json -r 1.1.1.1 example.com
+# Формат вывода
+./http-tester -f json example.com
+./http-tester -f yaml example.com
 ```
 
 ## Формат конфигурации
@@ -91,12 +97,13 @@
 ```yaml
 name: example.com
 dns:
-  a: yes        # A запись должна быть
-  aaaa: yes     # AAAA запись должна быть
-  https: yes    # HTTPS запись должна быть
+  a: yes
+  aaaa: yes
+  https: yes
 web:
-  http: redirect  # порт 80: redirect (301/302) или direct (200)
-  https: true     # проверять HTTPS (HTTP/2, HTTP/3 автоматически)
+  http: redirect
+  https: any
+  test_all_ips: false
 ```
 
 ### DNS записи
@@ -106,8 +113,7 @@ web:
 | `yes` | Запись должна существовать, иначе FAIL |
 | `no` | Записи не должно быть, если есть — FAIL |
 | `optional` | Опционально: если есть — проверять, если нет — пропустить |
-| отсутствие | Не проверять |
-| пустая секция `dns:` | Все записи опциональные (как `optional`) |
+| пустая секция `dns:` | Все записи опциональные |
 
 ### Веб-сервер (web)
 
@@ -121,55 +127,57 @@ web:
 | | `redirect` | Порт 443: ожидаем только 301/302 |
 | | `direct` | Порт 443: ожидаем только 200 OK |
 | | `no` | Порт 443 не проверяется |
-| пустая секция `web:` | | `http: any`, `https: any` |
+| `test_all_ips` | `true/false` | Проверять все найденные IP (по умолчанию false) |
 
 При `https: any/redirect/direct` автоматически выполняются:
 
 1. **HTTP/2** — всегда
-2. **HTTP/3** — только если DNS содержит HTTPS запись с alpn=h3 или Alt-Svc: h3
+2. **HTTP/3** — только если Alt-Svc: h3
 
 ## Пример вывода
 
 ```
-Started: 10.07.2026 14:04:44 +05
+Started: 12.07.2026 04:54:04 +05
 
-Testing: example.com
+Testing: tavda.net
   DNS: A(yes), AAAA(yes), HTTPS(yes)
-  Web: HTTP(any), HTTPS(any)
+  Web: HTTP(redirect), HTTPS(any)
 
-Resolver: 1.1.1.1:53
+Test Results
+Resolver: 8.8.8.8:53
 
-=== example.com ===
-  [PASS] dns: example.com resolved: A: [192.0.2.1], AAAA: [2001:db8::1]
-  [PASS] dns-https: found 1 HTTPS record(s)
-  [PASS] dns-consistency: consistent
-  [PASS] http-http1-ipv4: http://example.com/ -> 302 Moved Temporarily
-  [PASS] http-http1-ipv6: http://example.com/ -> 302 Moved Temporarily
-  [PASS] https-http2-ipv4: https://example.com/ -> 200 OK
-  [PASS] https-http2-ipv6: https://example.com/ -> 200 OK
-  [PASS] https-http3-ipv4: https://example.com/ -> 200 OK
-  [PASS] https-http3-ipv6: https://example.com/ -> 200 OK
-  [WARN] http-status-consistency: inconsistent HTTP responses: 200 (http-ipv4) vs 301 (http-ipv6)
-  [WARN] consistency: different content detected between https-http2-ipv4 and https-http3-ipv4 (word overlap: 55%, size ratio: 1.2x)
+  DNS:
+    [PASS] tavda.net resolved
+           A 185.199.108.153
+           AAAA 2606:50c0:8000::153
+    [PASS] no HTTPS records in response (optional)
+
+  HTTP:
+    [PASS] http://tavda.net/ -> 301 Moved Permanently (IPv4)
+    [PASS] http://tavda.net/ -> 301 Moved Permanently (IPv6)
+
+  HTTPS:
+    [PASS] https://tavda.net/ -> 200 OK (HTTP/2, IPv4)
+    [PASS] https://tavda.net/ -> 200 OK (HTTP/2, IPv6)
+    [PASS] https://tavda.net/ -> 200 OK (HTTP/3, IPv4)
+    [PASS] https://tavda.net/ -> 200 OK (HTTP/3, IPv6)
 
 --- Summary ---
-All 9 check(s) passed
-1 warning(s)
+All 6 check(s) passed
 ```
 
 ## Сборка
 
 ```bash
-# Локальная сборка (dev версия с информацией о коммите)
+# Локальная сборка
 go build -o http-tester .
 
 # Сборка релизной версии
-go build -ldflags "-X main.version=v1.0" -o http-tester .
+go build -ldflags "-X main.version=v1.0-RC3" -o http-tester .
 ```
-
-Dev-сборка автоматически определяет коммит, дату и наличие несохранённых изменений через `debug.ReadBuildInfo()`.
 
 ## Зависимости
 
-- `github.com/miekg/dns` — для HTTPS DNS записей
-- `github.com/quic-go/quic-go` — для HTTP/3
+- `github.com/miekg/dns` — DNS резолвер и HTTPS DNS записи
+- `github.com/quic-go/quic-go` — HTTP/3
+- `github.com/spf13/pflag` — CLI аргументы
