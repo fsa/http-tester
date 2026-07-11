@@ -68,7 +68,7 @@ func main() {
 
 	if *showVersion {
 		printVersion()
-		os.Exit(0)
+		return
 	}
 
 	var cfg *config.DomainConfig
@@ -305,7 +305,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 					httpsPassed := false
 					for _, r := range results {
 						if r.Passed {
-						httpsPassed = true
+							httpsPassed = true
 							break
 						}
 					}
