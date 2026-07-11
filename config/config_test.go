@@ -80,7 +80,7 @@ web:
 	}
 }
 
-func TestLoad_DomainFromFileOverridesDefault(t *testing.T) {
+func TestLoad_DomainFromCLIOverridesFile(t *testing.T) {
 	yaml := `
 name: from-file.com
 dns:
@@ -97,13 +97,17 @@ dns:
 	}
 	tmpFile.Close()
 
-	// Domain from CLI, but config file provides name — file wins
+	// Domain from CLI overrides config file
 	cfg, err := Load("cli.com", tmpFile.Name())
 	if err != nil {
 		t.Fatalf("Load error: %v", err)
 	}
-	if cfg.Name != "from-file.com" {
-		t.Errorf("Name = %q, want %q (file overrides default)", cfg.Name, "from-file.com")
+	if cfg.Name != "cli.com" {
+		t.Errorf("Name = %q, want %q (CLI overrides file)", cfg.Name, "cli.com")
+	}
+	// But other fields from file are preserved
+	if cfg.DNS.A != DNSYes {
+		t.Errorf("DNS.A = %q, want %q (file value preserved)", cfg.DNS.A, DNSYes)
 	}
 }
 

@@ -120,7 +120,7 @@ func (d *DomainConfig) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // Load creates a config from domain name and optional config file.
-// Default: dns optional, web any. Config file values override defaults.
+// Priority: CLI args > config file > defaults.
 func Load(domain, configFile string) (*DomainConfig, error) {
 	if domain == "" && configFile == "" {
 		return nil, fmt.Errorf("domain name required (via CLI or config file)")
@@ -133,10 +133,6 @@ func Load(domain, configFile string) (*DomainConfig, error) {
 		Web:    &WebChecks{HTTP: HTTPAny, HTTPS: HTTPAny},
 	}
 
-	if domain != "" {
-		cfg.Name = domain
-	}
-
 	if configFile != "" {
 		data, err := os.ReadFile(configFile)
 		if err != nil {
@@ -145,6 +141,11 @@ func Load(domain, configFile string) (*DomainConfig, error) {
 		if err := yaml.Unmarshal(data, cfg); err != nil {
 			return nil, fmt.Errorf("parsing config: %w", err)
 		}
+	}
+
+	// CLI domain overrides config file
+	if domain != "" {
+		cfg.Name = domain
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -156,6 +157,28 @@ func Load(domain, configFile string) (*DomainConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// ApplyCLI applies CLI overrides on top of loaded config.
+func (c *DomainConfig) ApplyCLI(dnsA, dnsAAAA, dnsHTTPS, webHTTP, webHTTPS string, testAllIPs bool, testAllIPsSet bool) {
+	if dnsA != "" {
+		c.DNS.A = DNSRecordCheck(dnsA)
+	}
+	if dnsAAAA != "" {
+		c.DNS.AAAA = DNSRecordCheck(dnsAAAA)
+	}
+	if dnsHTTPS != "" {
+		c.DNS.HTTPS = DNSRecordCheck(dnsHTTPS)
+	}
+	if webHTTP != "" {
+		c.Web.HTTP = HTTPMode(webHTTP)
+	}
+	if webHTTPS != "" {
+		c.Web.HTTPS = HTTPMode(webHTTPS)
+	}
+	if testAllIPsSet {
+		c.Web.TestAllIPs = testAllIPs
+	}
 }
 
 // LoadDomain is a convenience wrapper for loading config from a file only.

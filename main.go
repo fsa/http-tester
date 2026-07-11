@@ -50,24 +50,54 @@ func printVersion() {
 
 func main() {
 	var (
-		resolver    string
-		port        string
-		format      string
-		configFile  string
-		showVersion bool
+		resolver     string
+		port         string
+		format       string
+		configFile   string
+		showVersion  bool
+		dnsA         string
+		dnsAAAA      string
+		dnsHTTPS     string
+		webHTTP      string
+		webHTTPS     string
+		testAllIPs   bool
+		testAllIPsSet bool
 	)
 
-	flag.StringVarP(&resolver, "resolver", "r", "", "DNS resolver address (e.g. 8.8.8.8 or 2001:4860:4860::8888)")
+	flag.StringVarP(&resolver, "resolver", "r", "", "DNS resolver address")
 	flag.StringVarP(&port, "port", "p", "53", "DNS resolver port")
-	flag.StringVarP(&format, "format", "f", "text", "output format: text, json, json-pretty, yaml")
+	flag.StringVarP(&format, "format", "f", "text", "output format: text, json, yaml")
 	flag.StringVarP(&configFile, "config", "c", "", "config file path")
 	flag.BoolVarP(&showVersion, "version", "V", false, "print version and exit")
+	flag.StringVar(&dnsA, "dns.a", "", "A record check: yes/no/optional")
+	flag.StringVar(&dnsAAAA, "dns.aaaa", "", "AAAA record check: yes/no/optional")
+	flag.StringVar(&dnsHTTPS, "dns.https", "", "HTTPS record check: yes/no/optional")
+	flag.StringVar(&webHTTP, "web.http", "", "HTTP mode: any/redirect/direct/no")
+	flag.StringVar(&webHTTPS, "web.https", "", "HTTPS mode: any/redirect/direct/no")
+	flag.BoolVar(&testAllIPs, "web.test-all-ips", false, "test all resolved IPs")
+
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "web.test-all-ips" {
+			testAllIPsSet = true
+		}
+	})
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] <domain>\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "       %s [options] -c <config.yaml>\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Options:\n")
-		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "  -c, --config <file>        config file path\n")
+		fmt.Fprintf(os.Stderr, "  -r, --resolver <addr>      DNS resolver address\n")
+		fmt.Fprintf(os.Stderr, "  -p, --port <port>          resolver port (default 53)\n")
+		fmt.Fprintf(os.Stderr, "  -f, --format <format>      output format: text, json, yaml\n")
+		fmt.Fprintf(os.Stderr, "  -V, --version              print version and exit\n")
+		fmt.Fprintf(os.Stderr, "\nConfig overrides (CLI > config file > defaults):\n")
+		fmt.Fprintf(os.Stderr, "  --dns.a <value>            yes/no/optional\n")
+		fmt.Fprintf(os.Stderr, "  --dns.aaaa <value>         yes/no/optional\n")
+		fmt.Fprintf(os.Stderr, "  --dns.https <value>        yes/no/optional\n")
+		fmt.Fprintf(os.Stderr, "  --web.http <value>         any/redirect/direct/no\n")
+		fmt.Fprintf(os.Stderr, "  --web.https <value>        any/redirect/direct/no\n")
+		fmt.Fprintf(os.Stderr, "  --web.test-all-ips         test all resolved IPs\n")
 	}
 
 	flag.Parse()
@@ -87,6 +117,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Apply CLI overrides
+	cfg.ApplyCLI(dnsA, dnsAAAA, dnsHTTPS, webHTTP, webHTTPS, testAllIPs, testAllIPsSet)
 
 	// Build resolver address from host + port
 	var resolverAddr string
