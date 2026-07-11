@@ -64,8 +64,9 @@ func (m *HTTPMode) UnmarshalYAML(value *yaml.Node) error {
 }
 
 type WebChecks struct {
-	HTTP  HTTPMode `yaml:"http,omitempty"`
-	HTTPS HTTPMode `yaml:"https,omitempty"`
+	HTTP       HTTPMode `yaml:"http,omitempty"`
+	HTTPS      HTTPMode `yaml:"https,omitempty"`
+	TestAllIPs bool     `yaml:"test_all_ips,omitempty"`
 }
 
 // UnmarshalYAML handles empty web: section (sets defaults: http=any, https=any)

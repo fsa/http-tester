@@ -6,99 +6,69 @@ import (
 	"time"
 
 	"http-tester/checker"
+	"http-tester/checker/teststats"
 )
 
-func TestPrintText(t *testing.T) {
-	results := []checker.RunResult{
-		{
-			Domain: "example.com",
-			Results: []*checker.Result{
-				{
-					Checker: "dns",
-					Domain:  "example.com",
-					Passed:  true,
-					Details: "resolved",
-				},
-				{
-					Checker: "http-ipv4",
-					Domain:  "example.com",
-					Passed:  false,
-					Details: "failed",
-				},
-			},
-		},
+func makeStats(results ...checker.RunResult) *teststats.Stats {
+	s := &teststats.Stats{}
+	for _, r := range results {
+		s.AddRunResult(r)
 	}
+	return s
+}
 
-	exitCode := Print(results, "8.8.8.8:53", time.Now(), "text")
-	if exitCode != 1 {
-		t.Errorf("exitCode = %d, want 1 (has failures)", exitCode)
+func TestPrintText(t *testing.T) {
+	stats := makeStats(checker.RunResult{
+		Domain: "example.com",
+		Results: []*checker.Result{
+			{Checker: "dns", Domain: "example.com", Passed: true, Details: "resolved"},
+			{Checker: "http-ipv4", Domain: "example.com", Passed: false, Details: "failed"},
+		},
+	})
+
+	exitCode := Print(stats, "8.8.8.8:53", time.Now(), "text")
+	if exitCode != teststats.Fail {
+		t.Errorf("exitCode = %d, want %d (has failures)", exitCode, teststats.Fail)
 	}
 }
 
 func TestPrintJSON(t *testing.T) {
-	results := []checker.RunResult{
-		{
-			Domain: "example.com",
-			Results: []*checker.Result{
-				{
-					Checker: "dns",
-					Domain:  "example.com",
-					Passed:  true,
-					Details: "resolved",
-					Records: []checker.Record{
-						{Type: "A", Value: "1.2.3.4"},
-					},
-				},
+	stats := makeStats(checker.RunResult{
+		Domain: "example.com",
+		Results: []*checker.Result{
+			{
+				Checker: "dns", Domain: "example.com", Passed: true, Details: "resolved",
+				Records: []checker.Record{{Type: "A", Value: "1.2.3.4"}},
 			},
 		},
-	}
+	})
 
-	// Test compact JSON
-	exitCode := Print(results, "8.8.8.8:53", time.Now(), "json")
+	exitCode := Print(stats, "8.8.8.8:53", time.Now(), "json")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
 
-	// Test pretty JSON
-	exitCode = Print(results, "8.8.8.8:53", time.Now(), "json-pretty")
+	exitCode = Print(stats, "8.8.8.8:53", time.Now(), "json-pretty")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
 }
 
 func TestPrintJSON_Structure(t *testing.T) {
-	results := []checker.RunResult{
-		{
-			Domain: "example.com",
-			Results: []*checker.Result{
-				{
-					Checker:     "https-http2-ipv4",
-					Domain:      "example.com",
-					Passed:      true,
-					Details:     "200 OK",
-					HTTPVersion: "HTTP/2",
-					AltSvc:      "h3=\":443\"",
-					RedirectTo:  "https://example.com/",
-				},
-				{
-					Checker: "dns-https-info",
-					Domain:  "example.com",
-					Passed:  true,
-					Info:    true,
-					Details: "info message",
-				},
-				{
-					Checker: "http-alt-svc-warn",
-					Domain:  "example.com",
-					Passed:  false,
-					Warning: true,
-					Details: "warn message",
-				},
+	stats := makeStats(checker.RunResult{
+		Domain: "example.com",
+		Results: []*checker.Result{
+			{
+				Checker: "https-http2-ipv4", Domain: "example.com", Passed: true,
+				Details: "200 OK", HTTPVersion: "HTTP/2", AltSvc: "h3=\":443\"",
+				RedirectTo: "https://example.com/",
 			},
+			{Checker: "dns-https-info", Domain: "example.com", Passed: true, Info: true, Details: "info message"},
+			{Checker: "http-alt-svc-warn", Domain: "example.com", Passed: false, Warning: true, Details: "warn message"},
 		},
-	}
+	})
 
-	report := buildReport(results, "8.8.8.8:53", time.Now())
+	report := buildReport(stats, "8.8.8.8:53", time.Now())
 
 	if report.Summary.Total != 1 {
 		t.Errorf("Total = %d, want 1", report.Summary.Total)
@@ -116,7 +86,6 @@ func TestPrintJSON_Structure(t *testing.T) {
 		t.Errorf("Info = %d, want 1", report.Summary.Info)
 	}
 
-	// Check JSON serialization
 	data, err := json.Marshal(report)
 	if err != nil {
 		t.Fatalf("json.Marshal error: %v", err)
@@ -136,71 +105,43 @@ func TestPrintJSON_Structure(t *testing.T) {
 }
 
 func TestPrintYAML(t *testing.T) {
-	results := []checker.RunResult{
-		{
-			Domain: "example.com",
-			Results: []*checker.Result{
-				{
-					Checker: "dns",
-					Passed:  true,
-					Details: "resolved",
-				},
-			},
+	stats := makeStats(checker.RunResult{
+		Domain: "example.com",
+		Results: []*checker.Result{
+			{Checker: "dns", Passed: true, Details: "resolved"},
 		},
-	}
+	})
 
-	exitCode := Print(results, "8.8.8.8:53", time.Now(), "yaml")
+	exitCode := Print(stats, "8.8.8.8:53", time.Now(), "yaml")
 	if exitCode != 0 {
 		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
 }
 
 func TestPrintText_WithError(t *testing.T) {
-	results := []checker.RunResult{
-		{
-			Domain: "example.com",
-			Results: []*checker.Result{
-				{
-					Checker: "dns",
-					Domain:  "example.com",
-					Passed:  false,
-					Error:   true,
-					Details: "resolver unreachable",
-				},
-				{
-					Checker: "dns-https",
-					Domain:  "example.com",
-					Passed:  false,
-					Error:   true,
-					Details: "HTTPS lookup failed",
-				},
-			},
+	stats := makeStats(checker.RunResult{
+		Domain: "example.com",
+		Results: []*checker.Result{
+			{Checker: "dns", Domain: "example.com", Passed: false, Error: true, Details: "resolver unreachable"},
+			{Checker: "dns-https", Domain: "example.com", Passed: false, Error: true, Details: "HTTPS lookup failed"},
 		},
-	}
+	})
 
-	exitCode := Print(results, "127.0.0.2:53", time.Now(), "text")
-	if exitCode != 1 {
-		t.Errorf("exitCode = %d, want 1 (errors count as failures)", exitCode)
+	exitCode := Print(stats, "127.0.0.2:53", time.Now(), "text")
+	if exitCode != teststats.Error {
+		t.Errorf("exitCode = %d, want %d (errors)", exitCode, teststats.Error)
 	}
 }
 
 func TestPrintJSON_WithError(t *testing.T) {
-	results := []checker.RunResult{
-		{
-			Domain: "example.com",
-			Results: []*checker.Result{
-				{
-					Checker: "dns",
-					Domain:  "example.com",
-					Passed:  false,
-					Error:   true,
-					Details: "resolver unreachable",
-				},
-			},
+	stats := makeStats(checker.RunResult{
+		Domain: "example.com",
+		Results: []*checker.Result{
+			{Checker: "dns", Domain: "example.com", Passed: false, Error: true, Details: "resolver unreachable"},
 		},
-	}
+	})
 
-	report := buildReport(results, "127.0.0.2:53", time.Now())
+	report := buildReport(stats, "127.0.0.2:53", time.Now())
 
 	if report.Summary.Total != 1 {
 		t.Errorf("Total = %d, want 1", report.Summary.Total)

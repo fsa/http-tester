@@ -10,6 +10,7 @@ import (
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
+	"http-tester/checker/teststats"
 	httpchecker "http-tester/checker/web"
 	"http-tester/config"
 	"http-tester/report"
@@ -122,17 +123,17 @@ func main() {
 		printPlan(cfg)
 	}
 
-	var allResults []checker.RunResult
+	stats := &teststats.Stats{}
 
 	rr := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6)
-	allResults = append(allResults, rr)
+	stats.AddRunResult(rr)
 
 	for _, alias := range cfg.Aliases {
 		arr := runDomain(alias.Name, alias.DNS, alias.HasDNS, alias.Web, alias.HasWeb, resolverAddr, localIPv4, localIPv6)
-		allResults = append(allResults, arr)
+		stats.AddRunResult(arr)
 	}
 
-	exitCode := report.Print(allResults, resolverAddr, startTime, format)
+	exitCode := report.Print(stats, resolverAddr, startTime, format)
 	os.Exit(exitCode)
 }
 
@@ -338,21 +339,39 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 				httpsMode = string(webChecks.HTTPS)
 			}
 		}
-		results := httpchecker.RunAutoChecks(domain, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, localIPv4, localIPv6)
-
-		if dnsResult != nil {
-			var filtered []*checker.Result
-			for _, r := range results {
-				if strings.Contains(r.Checker, "ipv4") && !dnsResult.HasA {
-					continue
-				}
-				if strings.Contains(r.Checker, "ipv6") && !dnsResult.HasAAAA {
-					continue
-				}
-				filtered = append(filtered, r)
-			}
-			results = filtered
+		var ipv4s, ipv6s []string
+		testAllIPs := false
+		if webChecks != nil {
+			testAllIPs = webChecks.TestAllIPs
 		}
+		if dnsResult != nil {
+			ipv4s = dnsResult.IPv4s
+			ipv6s = dnsResult.IPv6s
+		}
+
+		// Warn when multiple IPs exist but test_all_ips is off
+		if !testAllIPs {
+			if len(ipv4s) > 1 {
+				rr.Results = append(rr.Results, &checker.Result{
+					Checker: "web-info",
+					Domain:  domain,
+					Passed:  true,
+					Warning: true,
+					Details: fmt.Sprintf("Found %d IPv4 addresses, testing only system-selected (%s). Set test_all_ips: true to test all.", len(ipv4s), ipv4s[0]),
+				})
+			}
+			if len(ipv6s) > 1 {
+				rr.Results = append(rr.Results, &checker.Result{
+					Checker: "web-info",
+					Domain:  domain,
+					Passed:  true,
+					Warning: true,
+					Details: fmt.Sprintf("Found %d IPv6 addresses, testing only system-selected (%s). Set test_all_ips: true to test all.", len(ipv6s), ipv6s[0]),
+				})
+			}
+		}
+
+		results := httpchecker.RunAutoChecks(domain, ipv4s, ipv6s, testAllIPs, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, localIPv4, localIPv6)
 
 		rr.Results = append(rr.Results, results...)
 	}

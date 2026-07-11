@@ -12,6 +12,8 @@ import (
 type DNSResult struct {
 	HasA    bool
 	HasAAAA bool
+	IPv4s   []string // all IPv4 addresses from A records
+	IPv6s   []string // all IPv6 addresses from AAAA records
 }
 
 type DNSChecker struct {
@@ -60,6 +62,8 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 
 	dnsResult.HasA = len(ipv4s) > 0
 	dnsResult.HasAAAA = len(ipv6s) > 0
+	dnsResult.IPv4s = ipv4s
+	dnsResult.IPv6s = ipv6s
 
 	// Check A records
 	if c.A == config.DNSYes {

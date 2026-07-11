@@ -24,13 +24,12 @@ const maxBodySize = 512 * 1024 // 512 KB max body size for consistency check
 // - Port 80: HTTP/1.1 with httpMode
 // - Port 443: HTTP/2 with httpsMode (only if httpsMode != "no")
 // - HTTP/3: only if Alt-Svc h3 detected and httpsMode != "no"
-func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string, localIPv4, localIPv6 bool) []*checker.Result {
+// When testAllIPs is true, checks are run for every IP; otherwise only the first of each type.
+func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string, localIPv4, localIPv6 bool) []*checker.Result {
 	var results []*checker.Result
 
-	ipv4, ipv6 := resolveBoth(domain)
-
 	// Check local connectivity and add INFO to this domain's results
-	if ipv4 != "" && !localIPv4 {
+	if len(ipv4s) > 0 && !localIPv4 {
 		results = append(results, &checker.Result{
 			Checker: "web-info",
 			Domain:  domain,
@@ -38,9 +37,9 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 			Info:    true,
 			Details: "IPv4 not available on this host — skipping IPv4 tests",
 		})
-		ipv4 = ""
+		ipv4s = nil
 	}
-	if ipv6 != "" && !localIPv6 {
+	if len(ipv6s) > 0 && !localIPv6 {
 		results = append(results, &checker.Result{
 			Checker: "web-info",
 			Domain:  domain,
@@ -48,31 +47,45 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 			Info:    true,
 			Details: "IPv6 not available on this host — skipping IPv6 tests",
 		})
-		ipv6 = ""
+		ipv6s = nil
+	}
+
+	// Select IPs to test
+	var testIPv4s, testIPv6s []string
+	if testAllIPs {
+		testIPv4s = ipv4s
+		testIPv6s = ipv6s
+	} else {
+		if len(ipv4s) > 0 {
+			testIPv4s = []string{ipv4s[0]}
+		}
+		if len(ipv6s) > 0 {
+			testIPv6s = []string{ipv6s[0]}
+		}
 	}
 
 	// Port 80 - HTTP/1.1 check (skip if mode is "no")
 	if httpMode != "no" {
-		if ipv4 != "" {
-			results = append(results, checkPort(domain, "ipv4", ipv4, 80, "http", "http1", httpMode))
+		for _, ip := range testIPv4s {
+			results = append(results, checkPort(domain, ipLabel("ipv4", ip, testAllIPs, len(testIPv4s)), ip, 80, "http", "http1", httpMode))
 		}
-		if ipv6 != "" {
-			results = append(results, checkPort(domain, "ipv6", ipv6, 80, "http", "http1", httpMode))
+		for _, ip := range testIPv6s {
+			results = append(results, checkPort(domain, ipLabel("ipv6", ip, testAllIPs, len(testIPv6s)), ip, 80, "http", "http1", httpMode))
 		}
 	}
 
 	// Port 443 - HTTPS check (skip if mode is "no")
 	var altSvc string
 	if httpsMode != "no" {
-		if ipv4 != "" {
-			res := checkPort(domain, "ipv4", ipv4, 443, "https", "http2", httpsMode)
+		for _, ip := range testIPv4s {
+			res := checkPort(domain, ipLabel("ipv4", ip, testAllIPs, len(testIPv4s)), ip, 443, "https", "http2", httpsMode)
 			results = append(results, res)
 			if res.AltSvc != "" {
 				altSvc = res.AltSvc
 			}
 		}
-		if ipv6 != "" {
-			res := checkPort(domain, "ipv6", ipv6, 443, "https", "http2", httpsMode)
+		for _, ip := range testIPv6s {
+			res := checkPort(domain, ipLabel("ipv6", ip, testAllIPs, len(testIPv6s)), ip, 443, "https", "http2", httpsMode)
 			results = append(results, res)
 			if res.AltSvc != "" && altSvc == "" {
 				altSvc = res.AltSvc
@@ -82,11 +95,11 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 
 	// HTTP/3 check - only if Alt-Svc h3 detected and httpsMode != "no"
 	if httpsMode != "no" && strings.Contains(altSvc, "h3") {
-		if ipv4 != "" {
-			results = append(results, checkHTTP3(domain, "ipv4", ipv4))
+		for _, ip := range testIPv4s {
+			results = append(results, checkHTTP3(domain, ipLabel("ipv4", ip, testAllIPs, len(testIPv4s)), ip))
 		}
-		if ipv6 != "" {
-			results = append(results, checkHTTP3(domain, "ipv6", ipv6))
+		for _, ip := range testIPv6s {
+			results = append(results, checkHTTP3(domain, ipLabel("ipv6", ip, testAllIPs, len(testIPv6s)), ip))
 		}
 	}
 
@@ -302,24 +315,12 @@ func dialContext(port int, ip string) func(ctx context.Context, network, addr st
 	}
 }
 
-func resolveBoth(domain string) (ipv4, ipv6 string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	resolver := &net.Resolver{}
-	addrs, err := resolver.LookupIPAddr(ctx, domain)
-	if err != nil {
-		return "", ""
+// ipLabel returns "ipv4" or "ipv4:1.2.3.4" when multiple IPs are tested.
+func ipLabel(base, ip string, testAllIPs bool, count int) string {
+	if testAllIPs && count > 1 {
+		return base + ":" + ip
 	}
-
-	for _, addr := range addrs {
-		if addr.IP.To4() != nil && ipv4 == "" {
-			ipv4 = addr.IP.String()
-		} else if addr.IP.To4() == nil && ipv6 == "" {
-			ipv6 = addr.IP.String()
-		}
-	}
-	return ipv4, ipv6
+	return base
 }
 
 // wordFreq builds a frequency map of words from input bytes

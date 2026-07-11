@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"http-tester/checker"
+	"http-tester/checker/teststats"
 
 	"gopkg.in/yaml.v3"
 )
@@ -57,54 +57,41 @@ type JSONSummary struct {
 	Errors   int `json:"errors" yaml:"errors"`
 	Warnings int `json:"warnings" yaml:"warnings"`
 	Info     int `json:"info" yaml:"info"`
+	ExitCode int `json:"exit_code" yaml:"exit_code"`
 }
 
-func Print(results []checker.RunResult, resolver string, startTime time.Time, format string) int {
+func Print(stats *teststats.Stats, resolver string, startTime time.Time, format string) int {
 	switch format {
 	case "json":
-		return printJSON(results, resolver, startTime, false)
+		return printJSON(stats, resolver, startTime, false)
 	case "json-pretty", "json_pretty", "json-verbose":
-		return printJSON(results, resolver, startTime, true)
+		return printJSON(stats, resolver, startTime, true)
 	case "yaml", "yml":
-		return printYAML(results, resolver, startTime)
+		return printYAML(stats, resolver, startTime)
 	default:
-		return printText(results, resolver)
+		return printText(stats, resolver)
 	}
 }
 
-func printText(results []checker.RunResult, resolver string) int {
-	total := 0
-	passed := 0
-	warnings := 0
-	infos := 0
-	errors := 0
-
+func printText(stats *teststats.Stats, resolver string) int {
 	if resolver != "" {
 		fmt.Fprintf(os.Stdout, "\n%sResolver%s: %s\n", colorCyan, colorReset, resolver)
 	}
 
-	for _, r := range results {
+	for _, r := range stats.Results {
 		fmt.Fprintf(os.Stdout, "\n%s===%s %s %s===%s\n", colorCyan, colorReset, r.Domain, colorCyan, colorReset)
 		for _, res := range r.Results {
 			var status string
 			if res.Info {
 				status = colorWhite + "INFO" + colorReset
-				infos++
 			} else if res.Warning {
 				status = colorYellow + "WARN" + colorReset
-				warnings++
 			} else if res.Error {
 				status = colorRed + "ERROR" + colorReset
-				total++
-				errors++
+			} else if res.Passed {
+				status = colorGreen + "PASS" + colorReset
 			} else {
-				total++
-				if res.Passed {
-					status = colorGreen + "PASS" + colorReset
-					passed++
-				} else {
-					status = colorRed + "FAIL" + colorReset
-				}
+				status = colorRed + "FAIL" + colorReset
 			}
 			fmt.Fprintf(os.Stdout, "  [%s] %s: %s\n", status, res.Checker, res.Details)
 			if res.RedirectTo != "" {
@@ -120,55 +107,34 @@ func printText(results []checker.RunResult, resolver string) int {
 	}
 
 	fmt.Fprintf(os.Stdout, "\n%s--- Summary ---\n", colorCyan)
-	if total == passed {
-		fmt.Fprintf(os.Stdout, "%sAll %d check(s) passed%s\n", colorGreen, total, colorReset)
+	if stats.Total == stats.Passed {
+		fmt.Fprintf(os.Stdout, "%sAll %d check(s) passed%s\n", colorGreen, stats.Total, colorReset)
 	} else {
-		failed := total - passed - errors
-		fmt.Fprintf(os.Stdout, "%s%d passed%s, %s%d failed%s", colorGreen, passed, colorReset, colorRed, failed, colorReset)
-		if errors > 0 {
-			fmt.Fprintf(os.Stdout, ", %s%d error(s)%s", colorRed, errors, colorReset)
+		fmt.Fprintf(os.Stdout, "%s%d passed%s, %s%d failed%s", colorGreen, stats.Passed, colorReset, colorRed, stats.Failed, colorReset)
+		if stats.Errors > 0 {
+			fmt.Fprintf(os.Stdout, ", %s%d error(s)%s", colorRed, stats.Errors, colorReset)
 		}
 		fmt.Fprintln(os.Stdout)
 	}
-	if warnings > 0 {
-		fmt.Fprintf(os.Stdout, "%s%d warning(s)%s\n", colorYellow, warnings, colorReset)
+	if stats.Warnings > 0 {
+		fmt.Fprintf(os.Stdout, "%s%d warning(s)%s\n", colorYellow, stats.Warnings, colorReset)
 	}
-	if infos > 0 {
-		fmt.Fprintf(os.Stdout, "%s%d info(s)%s\n", colorWhite, infos, colorReset)
+	if stats.Info > 0 {
+		fmt.Fprintf(os.Stdout, "%s%d info(s)%s\n", colorWhite, stats.Info, colorReset)
 	}
 
-	if passed < total {
-		return 1
-	}
-	return 0
+	return stats.Code()
 }
 
-func buildReport(results []checker.RunResult, resolver string, startTime time.Time) JSONReport {
+func buildReport(stats *teststats.Stats, resolver string, startTime time.Time) JSONReport {
 	report := JSONReport{
 		Timestamp: startTime.Format(time.RFC3339),
 		Resolver:  resolver,
 	}
-	total := 0
-	passed := 0
-	warnings := 0
-	infos := 0
-	errors := 0
 
-	for _, r := range results {
+	for _, r := range stats.Results {
 		domain := JSONDomain{Name: r.Domain}
 		for _, res := range r.Results {
-			if res.Info {
-				infos++
-			} else if res.Warning {
-				warnings++
-			} else {
-				total++
-				if res.Error {
-					errors++
-				} else if res.Passed {
-					passed++
-				}
-			}
 			jr := JSONResult{
 				Checker:     res.Checker,
 				Passed:      res.Passed,
@@ -192,19 +158,20 @@ func buildReport(results []checker.RunResult, resolver string, startTime time.Ti
 	}
 
 	report.Summary = JSONSummary{
-		Total:    total,
-		Passed:   passed,
-		Failed:   total - passed - errors,
-		Errors:   errors,
-		Warnings: warnings,
-		Info:     infos,
+		Total:    stats.Total,
+		Passed:   stats.Passed,
+		Failed:   stats.Failed,
+		Errors:   stats.Errors,
+		Warnings: stats.Warnings,
+		Info:     stats.Info,
+		ExitCode: stats.Code(),
 	}
 
 	return report
 }
 
-func printJSON(results []checker.RunResult, resolver string, startTime time.Time, pretty bool) int {
-	report := buildReport(results, resolver, startTime)
+func printJSON(stats *teststats.Stats, resolver string, startTime time.Time, pretty bool) int {
+	report := buildReport(stats, resolver, startTime)
 
 	var data []byte
 	if pretty {
@@ -214,14 +181,11 @@ func printJSON(results []checker.RunResult, resolver string, startTime time.Time
 	}
 	fmt.Fprintln(os.Stdout, string(data))
 
-	if report.Summary.Passed < report.Summary.Total {
-		return 1
-	}
-	return 0
+	return report.Summary.ExitCode
 }
 
-func printYAML(results []checker.RunResult, resolver string, startTime time.Time) int {
-	report := buildReport(results, resolver, startTime)
+func printYAML(stats *teststats.Stats, resolver string, startTime time.Time) int {
+	report := buildReport(stats, resolver, startTime)
 
 	data, err := yaml.Marshal(report)
 	if err != nil {
@@ -230,8 +194,5 @@ func printYAML(results []checker.RunResult, resolver string, startTime time.Time
 	}
 	fmt.Fprint(os.Stdout, string(data))
 
-	if report.Summary.Passed < report.Summary.Total {
-		return 1
-	}
-	return 0
+	return report.Summary.ExitCode
 }
