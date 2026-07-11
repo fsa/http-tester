@@ -16,7 +16,7 @@
 
 Выполняются если в конфиге есть секция `dns`.
 
-**Пустая секция `dns:`** — все записи считаются опциональными (как `maybe`). DNS проверки выполняются, но отсутствие записей не является ошибкой.
+**Пустая секция `dns:`** — все записи считаются опциональными (как `optional`). DNS проверки выполняются, но отсутствие записей не является ошибкой.
 
 ### 1.1. A и AAAA записи
 
@@ -26,15 +26,15 @@
 ```
 Резолвим домен через resolver (или системный)
 
-Для A (dns.a = yes/no/maybe):
+Для A (dns.a = yes/no/optional):
   yes:  Если A записей нет → FAIL
         Если есть → добавляем в Records
   no:   Если A записи есть → FAIL
         Если нет → OK (ожидаемо)
-  maybe: Если A записей нет → помечаем "not found (optional)"
+  optional: Если A записей нет → помечаем "not found (optional)"
          Если есть → добавляем в Records
 
-Для AAAA (dns.aaaa = yes/no/maybe):
+Для AAAA (dns.aaaa = yes/no/optional):
   Аналогично A
 
 Результат: DNSResult { HasA, HasAAAA }
@@ -58,14 +58,14 @@ dns.https = no:
   Если записи есть → FAIL (найдены, но не должны быть)
   Если нет → OK (ожидаемо)
 
-dns.https = maybe:
+dns.https = optional:
   Если записи есть → OK (optional) + запускаем согласованность
   Если нет → OK (optional)
 ```
 
 ### 1.3. Согласованность HTTPS ↔ A/AAAA (RFC 9460 анализ)
 
-**Когда:** HTTPS запись найдена (yes или maybe с результатом)
+**Когда:** HTTPS запись найдена (yes или optional с результатом)
 
 **Анализ для каждой HTTPS записи:**
 
@@ -180,7 +180,7 @@ dns.https = maybe:
 
 **Когда:** все три условия:
 1. `web.https = true` И обнаружен HTTP/3 (Alt-Svc: h3)
-2. `dns.https = maybe` (проверка опциональна)
+2. `dns.https = optional` (проверка опциональна)
 3. HTTPS DNS запись не найдена
 
 **Действие:** Выводим INFO:
@@ -190,7 +190,7 @@ HTTP/3 supported but no HTTPS DNS record — consider adding https: yes
 
 Не влияет на exit code.
 
-**Почему только для maybe:**
+**Почему только для optional:**
 - `dns.https = yes` + нет записи → уже FAIL на этапе DNS
 - `dns.https = no` + нет записи → OK (ожидаемо)
 - `dns.https` не задан → пользователь не настраивал, не рекомендуем
@@ -247,14 +247,14 @@ HTTPS DNS record exists but server does not advertise Alt-Svc header
 |-------------|------------------|-----------|-----------|
 | есть | есть | yes | OK |
 | есть | есть | no | FAIL (DNS) |
-| есть | есть | maybe | OK |
+| есть | есть | optional | OK |
 | есть | нет | yes | FAIL (DNS) |
 | есть | нет | no | OK |
-| есть | нет | maybe | **INFO** |
+| есть | нет | optional | **INFO** |
 | есть | нет | не задан | OK |
 | нет | есть | yes | OK |
 | нет | есть | no | FAIL (DNS) |
-| нет | есть | maybe | **WARN** |
+| нет | есть | optional | **WARN** |
 | нет | нет | любое | OK |
 
 ---
@@ -265,7 +265,7 @@ HTTPS DNS record exists but server does not advertise Alt-Svc header
 name: example.com
 dns:
   a: yes          # A обязательна → иначе FAIL
-  aaaa: maybe     # AAAA опционально → просто пропустим IPv6 проверки если нет
+  aaaa: optional     # AAAA опционально → просто пропустим IPv6 проверки если нет
   https: yes      # HTTPS обязательна → иначе FAIL + согласованность
 web:
   http: redirect  # порт 80 → ожидаем 301/302
@@ -282,5 +282,5 @@ web:
 7. https-http2-ipv6 (порт 443 → 200) — если AAAA есть
 8. https-http3-ipv4 (если Alt-Svc: h3)
 9. https-http3-ipv6 (если Alt-Svc: h3) — если AAAA есть
-10. dns-https-info (если HTTPS maybe + нет записи + Alt-Svc: h3)
+10. dns-https-info (если HTTPS optional + нет записи + Alt-Svc: h3)
 11. http-alt-svc-warn (если HTTPS запись есть + нет Alt-Svc)

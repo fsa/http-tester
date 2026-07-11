@@ -92,8 +92,8 @@ func RunAutoChecks(domain string, hasHTTPSCheck bool, httpsRecordExists bool, ht
 
 	hasH3 := strings.Contains(altSvc, "h3")
 
-	// Info: HTTP/3 supported, HTTPS check is optional (maybe), but record doesn't exist
-	if httpsMode != "no" && hasH3 && httpsCheckMode == "maybe" && !httpsRecordExists {
+	// Info: HTTP/3 supported, HTTPS check is optional (optional), but record doesn't exist
+	if httpsMode != "no" && hasH3 && httpsCheckMode == "optional" && !httpsRecordExists {
 		results = append(results, &checker.Result{
 			Checker: "dns-https-info",
 			Domain:  domain,
@@ -163,7 +163,7 @@ func checkPort(domain, ipVer, ip string, port int, scheme, protocol, mode string
 	}
 
 	transport := &http.Transport{
-		DialContext:            dialContext(port, ip),
+		DialContext:           dialContext(port, ip),
 		Protocols:             protocols,
 		ResponseHeaderTimeout: 10 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,

@@ -10,7 +10,7 @@ func TestLoadDomain(t *testing.T) {
 name: example.com
 dns:
   a: yes
-  aaaa: maybe
+  aaaa: optional
   https: no
 web:
   http: redirect
@@ -47,8 +47,8 @@ aliases:
 	if cfg.DNS.A != DNSYes {
 		t.Errorf("DNS.A = %q, want %q", cfg.DNS.A, DNSYes)
 	}
-	if cfg.DNS.AAAA != DNSMaybe {
-		t.Errorf("DNS.AAAA = %q, want %q", cfg.DNS.AAAA, DNSMaybe)
+	if cfg.DNS.AAAA != DNSOptional {
+		t.Errorf("DNS.AAAA = %q, want %q", cfg.DNS.AAAA, DNSOptional)
 	}
 	if cfg.DNS.HTTPS != DNSNo {
 		t.Errorf("DNS.HTTPS = %q, want %q", cfg.DNS.HTTPS, DNSNo)
@@ -99,18 +99,18 @@ web:
 		t.Fatalf("LoadDomain error: %v", err)
 	}
 
-	// Empty dns: creates struct with all maybe
+	// Empty dns: creates struct with all optional
 	if cfg.DNS == nil {
 		t.Fatal("Empty dns: DNS should not be nil")
 	}
-	if cfg.DNS.A != DNSMaybe {
-		t.Errorf("Empty dns: A = %q, want %q", cfg.DNS.A, DNSMaybe)
+	if cfg.DNS.A != DNSOptional {
+		t.Errorf("Empty dns: A = %q, want %q", cfg.DNS.A, DNSOptional)
 	}
-	if cfg.DNS.AAAA != DNSMaybe {
-		t.Errorf("Empty dns: AAAA = %q, want %q", cfg.DNS.AAAA, DNSMaybe)
+	if cfg.DNS.AAAA != DNSOptional {
+		t.Errorf("Empty dns: AAAA = %q, want %q", cfg.DNS.AAAA, DNSOptional)
 	}
-	if cfg.DNS.HTTPS != DNSMaybe {
-		t.Errorf("Empty dns: HTTPS = %q, want %q", cfg.DNS.HTTPS, DNSMaybe)
+	if cfg.DNS.HTTPS != DNSOptional {
+		t.Errorf("Empty dns: HTTPS = %q, want %q", cfg.DNS.HTTPS, DNSOptional)
 	}
 }
 

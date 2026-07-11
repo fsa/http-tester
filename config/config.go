@@ -9,10 +9,10 @@ import (
 type DNSRecordCheck string
 
 const (
-	DNSYes   DNSRecordCheck = "yes"
-	DNSNo    DNSRecordCheck = "no"
-	DNSMaybe DNSRecordCheck = "maybe"
-	DNSNone  DNSRecordCheck = ""
+	DNSYes      DNSRecordCheck = "yes"
+	DNSNo       DNSRecordCheck = "no"
+	DNSOptional DNSRecordCheck = "optional"
+	DNSNone     DNSRecordCheck = ""
 )
 
 type DNSChecks struct {
@@ -21,13 +21,13 @@ type DNSChecks struct {
 	HTTPS DNSRecordCheck `yaml:"https"`
 }
 
-// UnmarshalYAML handles empty dns: section (sets all to maybe)
+// UnmarshalYAML handles empty dns: section (sets all to optional)
 func (d *DNSChecks) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode && value.Value == "" {
 		// dns: (empty) — all records optional
-		d.A = DNSMaybe
-		d.AAAA = DNSMaybe
-		d.HTTPS = DNSMaybe
+		d.A = DNSOptional
+		d.AAAA = DNSOptional
+		d.HTTPS = DNSOptional
 		return nil
 	}
 	// Normal mapping
@@ -123,7 +123,7 @@ func (d *DomainConfig) UnmarshalYAML(value *yaml.Node) error {
 				d.HasDNS = true
 				// Empty dns: means all records optional
 				if d.DNS == nil {
-					d.DNS = &DNSChecks{A: DNSMaybe, AAAA: DNSMaybe, HTTPS: DNSMaybe}
+					d.DNS = &DNSChecks{A: DNSOptional, AAAA: DNSOptional, HTTPS: DNSOptional}
 				}
 			}
 			if key == "web" {
@@ -149,7 +149,7 @@ func (a *AliasConfig) UnmarshalYAML(value *yaml.Node) error {
 			if key == "dns" {
 				a.HasDNS = true
 				if a.DNS == nil {
-					a.DNS = &DNSChecks{A: DNSMaybe, AAAA: DNSMaybe, HTTPS: DNSMaybe}
+					a.DNS = &DNSChecks{A: DNSOptional, AAAA: DNSOptional, HTTPS: DNSOptional}
 				}
 			}
 			if key == "web" {

@@ -79,7 +79,7 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 			result.Details = fmt.Sprintf("A records found but not expected: %v", ipv4s)
 			return []*checker.Result{result}, dnsResult, nil
 		}
-	} else if c.A == config.DNSMaybe {
+	} else if c.A == config.DNSOptional {
 		for _, ip := range ipv4s {
 			result.Records = append(result.Records, checker.Record{
 				Type:  "A",
@@ -110,7 +110,7 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 			result.Details = fmt.Sprintf("AAAA records found but not expected: %v", ipv6s)
 			return []*checker.Result{result}, dnsResult, nil
 		}
-	} else if c.AAAA == config.DNSMaybe {
+	} else if c.AAAA == config.DNSOptional {
 		for _, ip := range ipv6s {
 			result.Records = append(result.Records, checker.Record{
 				Type:  "AAAA",

@@ -87,9 +87,9 @@ func main() {
 			Name:   flag.Arg(0),
 			HasDNS: true,
 			DNS: &config.DNSChecks{
-				A:     config.DNSMaybe,
-				AAAA:  config.DNSMaybe,
-				HTTPS: config.DNSMaybe,
+				A:     config.DNSOptional,
+				AAAA:  config.DNSOptional,
+				HTTPS: config.DNSOptional,
 			},
 			HasWeb: true,
 			Web: &config.WebChecks{
@@ -278,7 +278,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 							r.Details = "no HTTPS records (expected)"
 						}
 					}
-				} else if dnsChecks.HTTPS == config.DNSMaybe {
+				} else if dnsChecks.HTTPS == config.DNSOptional {
 					httpsFound := false
 					for _, r := range results {
 						if r.Passed && len(r.Records) > 0 {
