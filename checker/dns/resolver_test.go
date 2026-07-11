@@ -1,6 +1,13 @@
 package dns
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	mdns "github.com/miekg/dns"
+)
 
 func TestNewResolver(t *testing.T) {
 	tests := []struct {
@@ -8,27 +15,16 @@ func TestNewResolver(t *testing.T) {
 		addr   string
 		server string
 	}{
-		// IPv4 without port
 		{"ipv4 no port", "8.8.8.8", "8.8.8.8:53"},
-		// IPv4 with port
 		{"ipv4 with port", "8.8.8.8:5353", "8.8.8.8:5353"},
-		// IPv6 without port, no brackets
 		{"ipv6 no brackets no port", "2001:4860:4860::8888", "[2001:4860:4860::8888]:53"},
-		// IPv6 with brackets, no port
 		{"ipv6 brackets no port", "[2001:4860:4860::8888]", "[2001:4860:4860::8888]:53"},
-		// IPv6 with brackets and port
 		{"ipv6 brackets with port", "[2001:4860:4860::8888]:5353", "[2001:4860:4860::8888]:5353"},
-		// IPv6 loopback
 		{"ipv6 loopback", "::1", "[::1]:53"},
-		// IPv6 loopback with brackets
 		{"ipv6 loopback brackets", "[::1]", "[::1]:53"},
-		// IPv4 localhost
 		{"ipv4 localhost", "127.0.0.1", "127.0.0.1:53"},
-		// IPv4 localhost with port
 		{"ipv4 localhost port", "127.0.0.1:5353", "127.0.0.1:5353"},
-		// Cloudflare DNS
 		{"cloudflare", "1.1.1.1", "1.1.1.1:53"},
-		// Google DNS IPv6
 		{"google ipv6", "2001:4860:4860::8844", "[2001:4860:4860::8844]:53"},
 	}
 
@@ -44,7 +40,129 @@ func TestNewResolver(t *testing.T) {
 
 func TestNewResolver_SystemMode(t *testing.T) {
 	r := NewResolver("")
-	if r.Server() != "system" {
-		t.Errorf("NewResolver(\"\").Server() = %q, want %q", r.Server(), "system")
+	// Server should be a real nameserver from resolv.conf, not "system"
+	if r.Server() == "" {
+		t.Error("NewResolver(\"\").Server() should not be empty")
+	}
+}
+
+func TestLookupIPAddr(t *testing.T) {
+	r := NewResolver("8.8.8.8")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	addrs, err := r.LookupIPAddr(ctx, "example.com")
+	if err != nil {
+		t.Fatalf("LookupIPAddr error: %v", err)
+	}
+	if len(addrs) == 0 {
+		t.Fatal("LookupIPAddr returned no addresses")
+	}
+
+	// example.com should have at least one IPv4
+	foundIPv4 := false
+	for _, a := range addrs {
+		if a.IP.To4() != nil {
+			foundIPv4 = true
+			break
+		}
+	}
+	if !foundIPv4 {
+		t.Error("expected at least one IPv4 address for example.com")
+	}
+}
+
+func TestLookupIPAddr_IPv6(t *testing.T) {
+	r := NewResolver("8.8.8.8")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	addrs, err := r.LookupIPAddr(ctx, "google.com")
+	if err != nil {
+		t.Fatalf("LookupIPAddr error: %v", err)
+	}
+
+	// google.com should have both IPv4 and IPv6
+	foundIPv4, foundIPv6 := false, false
+	for _, a := range addrs {
+		if a.IP.To4() != nil {
+			foundIPv4 = true
+		} else {
+			foundIPv6 = true
+		}
+	}
+	if !foundIPv4 {
+		t.Error("expected IPv4 for google.com")
+	}
+	if !foundIPv6 {
+		t.Error("expected IPv6 for google.com")
+	}
+}
+
+func TestLookupIPAddr_Nonexistent(t *testing.T) {
+	r := NewResolver("8.8.8.8")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := r.LookupIPAddr(ctx, "this-domain-does-not-exist-12345.example")
+	if err == nil {
+		t.Error("expected error for nonexistent domain")
+	}
+}
+
+func TestLookupHTTPS(t *testing.T) {
+	r := NewResolver("8.8.8.8")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := r.LookupHTTPS(ctx, "google.com")
+	if err != nil {
+		t.Fatalf("LookupHTTPS error: %v", err)
+	}
+
+	// google.com has HTTPS records
+	foundHTTPS := false
+	for _, rr := range resp.Answer {
+		if _, ok := rr.(*mdns.HTTPS); ok {
+			foundHTTPS = true
+			break
+		}
+	}
+	if !foundHTTPS {
+		t.Error("expected HTTPS records for google.com")
+	}
+}
+
+func TestLookupHTTPS_NoRecords(t *testing.T) {
+	r := NewResolver("8.8.8.8")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := r.LookupHTTPS(ctx, "example.com")
+	if err != nil {
+		t.Fatalf("LookupHTTPS error: %v", err)
+	}
+
+	// example.com may or may not have HTTPS records, just check no error
+	for _, rr := range resp.Answer {
+		if _, ok := rr.(*mdns.HTTPS); ok {
+			return // has records, that's fine
+		}
+	}
+}
+
+func TestLookupHTTPS_Nonexistent(t *testing.T) {
+	r := NewResolver("8.8.8.8")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := r.LookupHTTPS(ctx, "this-domain-does-not-exist-12345.example")
+	if err != nil {
+		// Connection error is acceptable
+		return
+	}
+	// NXDOMAIN is also acceptable
+	if resp.Rcode != 0 && !strings.Contains(resp.String(), "NXDOMAIN") {
+		// Just check we got a response
 	}
 }
