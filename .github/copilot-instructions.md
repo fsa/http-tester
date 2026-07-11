@@ -6,18 +6,26 @@
 
 - `main.go` — точка входа, CLI, оркестрация
 - `config/config.go` — типы и парсинг YAML
-- `checker/dns/resolver.go` — DNS-сервис: `net.Resolver` для A/AAAA, `miekg/dns` для HTTPS (тип 65)
+- `checker/dns/resolver.go` — DNS-резолвер на `miekg/dns`
 - `checker/dns/dns.go` — проверки A/AAAA записей
 - `checker/dns/https.go` — проверки HTTPS DNS записей и согласованности RFC 9460
 - `checker/web/web.go` — Web проверки (порт 80, 443, HTTP/2, HTTP/3)
 - `report/report.go` — вывод (текст + JSON)
 
-## Ключевые моменты
+## Правила
 
-- **Resolver** — единый DNS-сервис. По умолчанию `net.Resolver` (системный). С `-r` — указанный сервер для всех запросов. HTTPS-запросы всегда через `miekg/dns` (тип 65 не поддерживается `net.Resolver`).
-- Конфиг: один файл = один домен с алиасами
+### Использование библиотек
+
+- **Никогда не парсить системные файлы конфигурации вручную** (`/etc/resolv.conf`, `/etc/hosts` и т.п.). Использовать только возможности библиотек (например, `dns.ClientConfigFromFile` для resolv.conf).
+- Если библиотека не предоставляет нужный функционал — **обсудить с пользователем** альтернативы, а не писать кастомный парсинг.
+- Трогать файлы конфигурации системы можно **только с разрешения архитектора приложения**.
+
+### Ключевые моменты
+
+- **Resolver** — `miekg/dns` для всех DNS-запросов (A/AAAA/HTTPS). Без `-r` — первый nameserver из resolv.conf (через `dns.ClientConfigFromFile`). С `-r` — указанный сервер.
+- Конфиг: `config.Load(domain, configFile)` — единая точка входа. Создаёт дефолт, применяет YAML, валидирует.
 - DNS: `yes`/`no`/`optional` для проверки наличия/отсутствия записей
-- Web: `http: redirect|direct`, `https: true|false`
+- Web: `http: redirect|direct|any|no`, `https: any|redirect|direct|no`
 - IPv4/IPv6 тестируются автоматически
 - HTTP/3 работает только при `Alt-Svc: h3` в DNS или ответе
 - `*.yaml` в корне в `.gitignore` — не коммитить
