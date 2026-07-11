@@ -350,10 +350,10 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 		if dnsResult != nil {
 			var filtered []*checker.Result
 			for _, r := range results {
-				if contains(r.Checker, "ipv4") && !dnsResult.HasA {
+				if strings.Contains(r.Checker, "ipv4") && !dnsResult.HasA {
 					continue
 				}
-				if contains(r.Checker, "ipv6") && !dnsResult.HasAAAA {
+				if strings.Contains(r.Checker, "ipv6") && !dnsResult.HasAAAA {
 					continue
 				}
 				filtered = append(filtered, r)
@@ -367,18 +367,7 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 	return rr
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStr(s, substr))
-}
 
-func containsStr(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
 
 func checkLocalConnectivity() (hasIPv4, hasIPv6 bool) {
 	ifaces, err := net.Interfaces()

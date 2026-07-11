@@ -130,13 +130,4 @@ func (c *DNSChecker) Check(domain string) ([]*checker.Result, *DNSResult, error)
 	return []*checker.Result{result}, dnsResult, nil
 }
 
-func joinParts(parts []string) string {
-	s := ""
-	for i, p := range parts {
-		if i > 0 {
-			s += ", "
-		}
-		s += p
-	}
-	return s
-}
+

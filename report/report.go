@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"http-tester/checker"
@@ -221,30 +220,4 @@ func printYAML(results []checker.RunResult, resolver string, startTime time.Time
 	return 0
 }
 
-func FormatText(results []checker.RunResult) string {
-	var b strings.Builder
-	for _, r := range results {
-		b.WriteString(fmt.Sprintf("\n=== %s ===\n", r.Domain))
-		for _, res := range r.Results {
-			status := "PASS"
-			if res.Info {
-				status = "INFO"
-			} else if res.Warning {
-				status = "WARN"
-			} else if !res.Passed {
-				status = "FAIL"
-			}
-			b.WriteString(fmt.Sprintf("  [%s] %s: %s\n", status, res.Checker, res.Details))
-			if res.RedirectTo != "" {
-				b.WriteString(fmt.Sprintf("         -> %s\n", res.RedirectTo))
-			}
-			if res.AltSvc != "" {
-				b.WriteString(fmt.Sprintf("         Alt-Svc header found: %s\n", res.AltSvc))
-			}
-			for _, rec := range res.Records {
-				b.WriteString(fmt.Sprintf("         %s %s\n", rec.Type, rec.Value))
-			}
-		}
-	}
-	return b.String()
-}
+

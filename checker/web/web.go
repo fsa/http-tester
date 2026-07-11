@@ -483,11 +483,6 @@ func CheckStatusConsistency(results []*checker.Result) []*checker.Result {
 	return warnings
 }
 
-// isHTTPCheck returns true if the checker name is an HTTP check
-func isHTTPCheck(name string) bool {
-	return strings.HasPrefix(name, "http") && !strings.HasPrefix(name, "dns")
-}
-
 // parseStatusType extracts a normalized status type from Details string
 // e.g. "http-ipv4 http://example.com/ -> 200 OK" returns "200"
 func parseStatusType(details string) string {

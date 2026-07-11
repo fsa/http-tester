@@ -340,24 +340,4 @@ func hasOverlap(a, b []string) bool {
 	return false
 }
 
-// HasHTTPSRecord checks if domain has HTTPS DNS record.
-func HasHTTPSRecord(resolver *Resolver, domain string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
 
-	resp, err := resolver.LookupHTTPS(ctx, domain)
-	if err != nil {
-		return false
-	}
-
-	if resp.Rcode != mdns.RcodeSuccess {
-		return false
-	}
-
-	for _, rr := range resp.Answer {
-		if _, ok := rr.(*mdns.HTTPS); ok {
-			return true
-		}
-	}
-	return false
-}

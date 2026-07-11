@@ -56,8 +56,6 @@ func (m *HTTPMode) UnmarshalYAML(value *yaml.Node) error {
 		switch value.Value {
 		case "no":
 			*m = HTTPNo
-		case "any", "redirect", "direct", "":
-			*m = HTTPMode(value.Value)
 		default:
 			*m = HTTPMode(value.Value)
 		}
