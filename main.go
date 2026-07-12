@@ -76,12 +76,6 @@ func main() {
 	flag.StringVar(&webHTTPS, "web.https", "", "HTTPS mode: any/redirect/direct/no")
 	flag.BoolVar(&testAllIPs, "web.test-all-ips", false, "test all resolved IPs")
 
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "web.test-all-ips" {
-			testAllIPsSet = true
-		}
-	})
-
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] <domain>\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "       %s [options] -c <config.yaml>\n\n", os.Args[0])
@@ -101,6 +95,12 @@ func main() {
 	}
 
 	flag.Parse()
+
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "web.test-all-ips" {
+			testAllIPsSet = true
+		}
+	})
 
 	if showVersion {
 		printVersion()
