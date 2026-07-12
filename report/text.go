@@ -134,6 +134,9 @@ func (f *TextFormatter) Print(stats *checker.Stats, resolver string) int {
 			if res.AltSvc != "" {
 				fmt.Fprintf(os.Stdout, "           Alt-Svc: %s\n", res.AltSvc)
 			}
+			if res.ServerAddr != "" {
+				fmt.Fprintf(os.Stdout, "           Server: %s\n", res.ServerAddr)
+			}
 			for _, rec := range res.Records {
 				fmt.Fprintf(os.Stdout, "           %s %s\n", rec.Type, rec.Value)
 			}

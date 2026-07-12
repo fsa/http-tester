@@ -20,6 +20,7 @@ type Result struct {
 	HTTPVersion string
 	AltSvc      string
 	RedirectTo  string
+	ServerAddr  string // actual server IP used for the request
 	Body        []byte // normalized response body for consistency check
 }
 

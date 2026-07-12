@@ -42,6 +42,7 @@ type JSONResult struct {
 	HTTPVersion string       `json:"http_version,omitempty" yaml:"http_version,omitempty"`
 	AltSvc      string       `json:"alt_svc,omitempty" yaml:"alt_svc,omitempty"`
 	RedirectTo  string       `json:"redirect_to,omitempty" yaml:"redirect_to,omitempty"`
+	ServerAddr  string       `json:"server_addr,omitempty" yaml:"server_addr,omitempty"`
 }
 
 type JSONRecord struct {
@@ -112,6 +113,7 @@ func buildReport(stats *checker.Stats, resolver string) JSONReport {
 				HTTPVersion: res.HTTPVersion,
 				AltSvc:      res.AltSvc,
 				RedirectTo:  res.RedirectTo,
+				ServerAddr:  res.ServerAddr,
 			}
 			for _, rec := range res.Records {
 				jr.Records = append(jr.Records, JSONRecord{
