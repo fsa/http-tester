@@ -9,6 +9,7 @@ import (
 
 	"http-tester/checker"
 	"http-tester/checker/dns"
+	"http-tester/checker/host"
 	httpchecker "http-tester/checker/web"
 	"http-tester/config"
 	"http-tester/report"
@@ -131,12 +132,12 @@ func main() {
 	// Show pre-test info before running tests
 	report.Start(format, cfg)
 
-	// Check local IPv4/IPv6 connectivity before any tests
-	localIPv4, localIPv6 := checkLocalConnectivity()
-
 	stats := &checker.Stats{}
 
-	if err := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, localIPv4, localIPv6, stats); err != nil {
+	// Check local IPv4/IPv6 connectivity before any tests
+	host.CheckLocalConnectivity(stats)
+
+	if err := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, stats); err != nil {
 		fmt.Fprintf(os.Stderr, "\n\033[31mError:\033[0m %v\n", err)
 		os.Exit(1)
 	}
@@ -148,7 +149,7 @@ func main() {
 	os.Exit(stats.Code())
 }
 
-func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string, localIPv4, localIPv6 bool, stats *checker.Stats) error {
+func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string, stats *checker.Stats) error {
 	resolver, err := dns.NewResolver(resolverAddr)
 	if err != nil {
 		return err
@@ -229,38 +230,8 @@ func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webCheck
 			}
 		}
 
-		httpchecker.RunAutoChecks(domain, ipv4s, ipv6s, testAllIPs, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, localIPv4, localIPv6, stats)
+		httpchecker.RunAutoChecks(domain, ipv4s, ipv6s, testAllIPs, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, stats)
 	}
 
 	return nil
-}
-
-
-
-func checkLocalConnectivity() (hasIPv4, hasIPv6 bool) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return false, false
-	}
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrs {
-			ip, _, err := net.ParseCIDR(addr.String())
-			if err != nil {
-				continue
-			}
-			if ip.To4() != nil {
-				hasIPv4 = true
-			} else if ip.To16() != nil {
-				hasIPv6 = true
-			}
-		}
-	}
-	return hasIPv4, hasIPv6
 }

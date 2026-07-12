@@ -25,14 +25,14 @@ const maxBodySize = 512 * 1024 // 512 KB max body size for consistency check
 // - Port 443: HTTP/2 with httpsMode (only if httpsMode != "no")
 // - HTTP/3: only if Alt-Svc h3 detected and httpsMode != "no"
 // When testAllIPs is true, checks are run for every IP; otherwise only the first of each type.
-func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string, localIPv4, localIPv6 bool, stats *checker.Stats) {
+func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTTPSCheck bool, httpsRecordExists bool, httpsCheckMode string, httpMode string, httpsMode string, stats *checker.Stats) {
 	var results []*checker.Result
 
-	// Check local connectivity and add INFO to this domain's results
-	if len(ipv4s) > 0 && !localIPv4 {
+	// Filter IPs based on local connectivity from host check
+	if len(ipv4s) > 0 && !stats.HasLocalIPv4() {
 		results = append(results, &checker.Result{
 			Checker: "web-info",
-			Group:   "DNS",
+			Group:   "HTTP",
 			Domain:  domain,
 			Passed:  true,
 			Info:    true,
@@ -40,10 +40,10 @@ func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTT
 		})
 		ipv4s = nil
 	}
-	if len(ipv6s) > 0 && !localIPv6 {
+	if len(ipv6s) > 0 && !stats.HasLocalIPv6() {
 		results = append(results, &checker.Result{
 			Checker: "web-info",
-			Group:   "DNS",
+			Group:   "HTTPS",
 			Domain:  domain,
 			Passed:  true,
 			Info:    true,

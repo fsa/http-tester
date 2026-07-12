@@ -101,3 +101,26 @@ func (s *Stats) Code() int {
 	}
 	return code
 }
+
+// HasLocalIPv4 reports whether the host has IPv4 connectivity,
+// based on the host-ipv4 result stored in stats.
+func (s *Stats) HasLocalIPv4() bool {
+	return s.hasLocalIP("host-ipv4")
+}
+
+// HasLocalIPv6 reports whether the host has IPv6 connectivity,
+// based on the host-ipv6 result stored in stats.
+func (s *Stats) HasLocalIPv6() bool {
+	return s.hasLocalIP("host-ipv6")
+}
+
+func (s *Stats) hasLocalIP(checkerName string) bool {
+	for _, r := range s.Results {
+		for _, res := range r.Results {
+			if res.Checker == checkerName {
+				return res.Passed
+			}
+		}
+	}
+	return false
+}
