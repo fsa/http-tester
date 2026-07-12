@@ -197,12 +197,40 @@ All 6 check(s) passed
 
 ## Сборка
 
+### Через Make (рекомендуется)
+
 ```bash
-# Локальная сборка
+make build       # сборка dev-версии
+make test        # тесты
+make vet         # статический анализ
+make run ARGS="example.com"  # запуск
+make help        # список всех команд
+```
+
+### Без Make
+
+```bash
+# Сборка
 go build -o http-tester .
 
-# Сборка релизной версии
-go build -ldflags "-X main.version=v1.0.0" -o http-tester .
+# Тесты
+go test ./...
+
+# Статический анализ
+go vet ./...
+
+# Запуск
+./http-tester example.com
+```
+
+### Релизная сборка
+
+```bash
+# Все платформы
+make release
+
+# Или вручную
+go build -ldflags "-X main.version=v1.0-RC3" -o http-tester .
 ```
 
 ## Зависимости
