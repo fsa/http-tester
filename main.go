@@ -128,6 +128,9 @@ func main() {
 		resolverAddr = net.JoinHostPort(host, port)
 	}
 
+	// Show pre-test info before running tests
+	report.Start(format, cfg)
+
 	// Check local IPv4/IPv6 connectivity before any tests
 	localIPv4, localIPv6 := checkLocalConnectivity()
 

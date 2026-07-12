@@ -79,9 +79,16 @@ func Print(format string, stats *checker.Stats, cfg *config.DomainConfig, resolv
 	if !ok {
 		return fmt.Errorf("unknown format: %q (available: text, json, json-pretty, yaml)", format)
 	}
-	f.Start(cfg)
 	f.Print(stats, resolver)
 	return nil
+}
+
+func Start(format string, cfg *config.DomainConfig) {
+	f, ok := formatters[format]
+	if !ok {
+		return
+	}
+	f.Start(cfg)
 }
 
 func buildReport(stats *checker.Stats, resolver string) JSONReport {
