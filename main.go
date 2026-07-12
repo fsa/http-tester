@@ -8,11 +8,10 @@ import (
 	"strings"
 
 	"http-tester/checker"
-	"http-tester/checker/dns"
 	"http-tester/checker/host"
-	httpchecker "http-tester/checker/web"
 	"http-tester/config"
 	"http-tester/report"
+	"http-tester/runner"
 
 	flag "github.com/spf13/pflag"
 )
@@ -137,7 +136,8 @@ func main() {
 	// Check local IPv4/IPv6 connectivity before any tests
 	host.CheckLocalConnectivity(stats)
 
-	if err := runDomain(cfg.Name, cfg.DNS, cfg.HasDNS, cfg.Web, cfg.HasWeb, resolverAddr, stats); err != nil {
+	// Run all configured checks
+	if err := runner.Run(cfg, resolverAddr, stats); err != nil {
 		fmt.Fprintf(os.Stderr, "\n\033[31mError:\033[0m %v\n", err)
 		os.Exit(1)
 	}
@@ -147,91 +147,4 @@ func main() {
 		os.Exit(1)
 	}
 	os.Exit(stats.Code())
-}
-
-func runDomain(domain string, dnsChecks *config.DNSChecks, hasDNS bool, webChecks *config.WebChecks, cfgHasWeb bool, resolverAddr string, stats *checker.Stats) error {
-	resolver, err := dns.NewResolver(resolverAddr)
-	if err != nil {
-		return err
-	}
-
-	var dnsResult *dns.DNSResult
-	httpsRecordExists := false
-
-	// Run DNS checks
-	if hasDNS && dnsChecks != nil {
-		if dnsChecks.A != "" || dnsChecks.AAAA != "" {
-			c := dns.New(resolver)
-			c.A = dnsChecks.A
-			c.AAAA = dnsChecks.AAAA
-			dnsResult = c.Check(domain, stats)
-		}
-
-		// HTTPS record check
-		if dnsChecks.HTTPS != "" {
-			c := dns.NewHTTPSChecker(resolver)
-			httpsRecordExists = c.Check(domain, dnsChecks.HTTPS, stats)
-
-			if (dnsChecks.HTTPS == config.DNSOptional || dnsChecks.HTTPS == config.DNSYes) && httpsRecordExists {
-				dns.ConsistencyCheck(domain, resolver, stats)
-			}
-		}
-	}
-
-	// Run automatic HTTP checks if enabled
-	// webChecks can be nil if web: section is empty/null, apply defaults
-	if webChecks != nil || cfgHasWeb {
-		hasHTTPSCheck := dnsChecks != nil && dnsChecks.HTTPS != ""
-		httpsCheckMode := ""
-		if dnsChecks != nil {
-			httpsCheckMode = string(dnsChecks.HTTPS)
-		}
-		httpMode := "any"
-		httpsMode := "any"
-		if webChecks != nil {
-			if webChecks.HTTP != "" {
-				httpMode = string(webChecks.HTTP)
-			}
-			if webChecks.HTTPS != "" {
-				httpsMode = string(webChecks.HTTPS)
-			}
-		}
-		var ipv4s, ipv6s []string
-		testAllIPs := false
-		if webChecks != nil {
-			testAllIPs = webChecks.TestAllIPs
-		}
-		if dnsResult != nil {
-			ipv4s = dnsResult.IPv4s
-			ipv6s = dnsResult.IPv6s
-		}
-
-		// Warn when multiple IPs exist but test_all_ips is off
-		if !testAllIPs {
-			if len(ipv4s) > 1 {
-				stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
-					Checker: "web-info",
-					Group:   "DNS",
-					Domain:  domain,
-					Passed:  true,
-					Warning: true,
-					Details: fmt.Sprintf("Found %d IPv4 addresses, testing only system-selected (%s). Set test_all_ips: true to test all.", len(ipv4s), ipv4s[0]),
-				}}})
-			}
-			if len(ipv6s) > 1 {
-				stats.AddRunResult(checker.RunResult{Domain: domain, Results: []*checker.Result{{
-					Checker: "web-info",
-					Group:   "DNS",
-					Domain:  domain,
-					Passed:  true,
-					Warning: true,
-					Details: fmt.Sprintf("Found %d IPv6 addresses, testing only system-selected (%s). Set test_all_ips: true to test all.", len(ipv6s), ipv6s[0]),
-				}}})
-			}
-		}
-
-		httpchecker.RunAutoChecks(domain, ipv4s, ipv6s, testAllIPs, hasHTTPSCheck, httpsRecordExists, httpsCheckMode, httpMode, httpsMode, stats)
-	}
-
-	return nil
 }
