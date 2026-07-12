@@ -269,7 +269,7 @@ func checkPort(domain, ipVer, ip string, port int, scheme, protocol, mode string
 		result.Passed = isOK
 	}
 
-	result.Details = fmt.Sprintf("%s -> %s", u.String(), resp.Status)
+	result.Details = fmt.Sprintf("%s -> %s (via %s)", u.String(), resp.Status, ip)
 	result.HTTPVersion = resp.Proto
 	if loc := resp.Header.Get("Location"); loc != "" {
 		result.RedirectTo = loc
@@ -338,7 +338,7 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 	defer resp.Body.Close()
 
 	result.Passed = resp.StatusCode >= 200 && resp.StatusCode < 400
-	result.Details = fmt.Sprintf("%s -> %s", u.String(), resp.Status)
+	result.Details = fmt.Sprintf("%s -> %s (via %s)", u.String(), resp.Status, ip)
 	result.HTTPVersion = resp.Proto
 	if loc := resp.Header.Get("Location"); loc != "" {
 		result.RedirectTo = loc
