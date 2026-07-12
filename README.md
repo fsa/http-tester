@@ -166,36 +166,46 @@ web:
 ## Пример вывода
 
 ```text
-Started: 12.07.2026 04:54:04 +05
+Started: 12.07.2026 22:34:18 +05
 
-Testing: tavda.net
-  DNS: A(yes), AAAA(yes), HTTPS(yes)
-  Web: HTTP(redirect), HTTPS(any)
+Testing: tavda.info
+  DNS: A(optional), AAAA(optional), HTTPS(optional)
+  Web: HTTP(any), HTTPS(any)
 
 Test Results
 
   DNS:
-    [PASS] tavda.net resolved
-           A 185.199.108.153
-           AAAA 2606:50c0:8000::153
-    [PASS] no HTTPS records in response
+    [PASS] tavda.info resolved
+           A 87.120.92.93
+           AAAA 2a0b:4141:820:78a::2
+    [PASS] found 1 HTTPS record(s) (optional)
+           HTTPS priority=1 target=. alpn=h3,h2 ipv4hint=87.120.92.93 ipv6hint=2a0b:4141:820:78a::2
+    [PASS] record #1 (ServiceMode, priority=1): target: self (same domain); alpn: h3, h2; ipv4hint: [87.120.92.93] ✓; ipv6hint: [2a0b:4141:820:78a::2] ✓
 
   HTTP:
-    [PASS] http://tavda.net/ -> 301 Moved Permanently (IPv4)
-           -> https://tavda.net/
-           Server: 185.199.108.153
-    [PASS] http://tavda.net/ -> 301 Moved Permanently (IPv6)
-           -> https://tavda.net/
-           Server: 2606:50c0:8000::153
+    [PASS] http://tavda.info/ -> 302 Moved Temporarily (IPv4)
+           -> https://tavda.info/
+           Server: 87.120.92.93
+    [PASS] http://tavda.info/ -> 302 Moved Temporarily (IPv6)
+           -> https://tavda.info/
+           Server: 2a0b:4141:820:78a::2
 
   HTTPS:
-    [PASS] https://tavda.net/ -> 200 OK (HTTP/2, IPv4)
-           Server: 185.199.108.153
-    [PASS] https://tavda.net/ -> 200 OK (HTTP/2, IPv6)
-           Server: 2606:50c0:8000::153
+    [PASS] https://tavda.info/ -> 200 OK (HTTP/2, IPv4)
+           Alt-Svc: h3=":443";ma=86400
+           Server: 87.120.92.93
+    [PASS] https://tavda.info/ -> 200 OK (HTTP/2, IPv6)
+           Alt-Svc: h3=":443";ma=86400
+           Server: 2a0b:4141:820:78a::2
+    [PASS] https://tavda.info/ -> 200 OK (HTTP/3, IPv4)
+           Alt-Svc: h3=":443";ma=86400
+           Server: 87.120.92.93
+    [PASS] https://tavda.info/ -> 200 OK (HTTP/3, IPv6)
+           Alt-Svc: h3=":443";ma=86400
+           Server: 2a0b:4141:820:78a::2
 
 --- Summary ---
-All 6 check(s) passed
+All 9 check(s) passed
 ```
 
 ## Сборка
