@@ -16,11 +16,15 @@ func (s *Stats) AddRunResult(rr RunResult) {
 	s.Results = append(s.Results, rr)
 }
 
+func isInternal(res *Result) bool {
+	return res.Group == "Host"
+}
+
 func (s *Stats) Total() int {
 	n := 0
 	for _, r := range s.Results {
 		for _, res := range r.Results {
-			if !res.Info && !res.Warning {
+			if !res.Info && !res.Warning && !isInternal(res) {
 				n++
 			}
 		}
@@ -32,7 +36,7 @@ func (s *Stats) Passed() int {
 	n := 0
 	for _, r := range s.Results {
 		for _, res := range r.Results {
-			if !res.Info && !res.Warning && res.Passed {
+			if !res.Info && !res.Warning && !isInternal(res) && res.Passed {
 				n++
 			}
 		}
@@ -44,7 +48,7 @@ func (s *Stats) Failed() int {
 	n := 0
 	for _, r := range s.Results {
 		for _, res := range r.Results {
-			if !res.Info && !res.Warning && !res.Passed && !res.Error {
+			if !res.Info && !res.Warning && !isInternal(res) && !res.Passed && !res.Error {
 				n++
 			}
 		}
@@ -56,7 +60,7 @@ func (s *Stats) Errors() int {
 	n := 0
 	for _, r := range s.Results {
 		for _, res := range r.Results {
-			if res.Error {
+			if !isInternal(res) && res.Error {
 				n++
 			}
 		}
@@ -68,7 +72,7 @@ func (s *Stats) Warnings() int {
 	n := 0
 	for _, r := range s.Results {
 		for _, res := range r.Results {
-			if res.Warning {
+			if !isInternal(res) && res.Warning {
 				n++
 			}
 		}
@@ -80,7 +84,7 @@ func (s *Stats) Info() int {
 	n := 0
 	for _, r := range s.Results {
 		for _, res := range r.Results {
-			if res.Info {
+			if !isInternal(res) && res.Info {
 				n++
 			}
 		}
