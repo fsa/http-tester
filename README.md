@@ -176,33 +176,33 @@ Test Results
 
   DNS:
     [PASS] tavda.info resolved
-           A 87.120.92.93
-           AAAA 2a0b:4141:820:78a::2
+           A 192.0.2.1
+           AAAA 2001:db8::1
     [PASS] found 1 HTTPS record(s) (optional)
-           HTTPS priority=1 target=. alpn=h3,h2 ipv4hint=87.120.92.93 ipv6hint=2a0b:4141:820:78a::2
-    [PASS] record #1 (ServiceMode, priority=1): target: self (same domain); alpn: h3, h2; ipv4hint: [87.120.92.93] ✓; ipv6hint: [2a0b:4141:820:78a::2] ✓
+           HTTPS priority=1 target=. alpn=h3,h2 ipv4hint=192.0.2.1 ipv6hint=2001:db8::1
+    [PASS] record #1 (ServiceMode, priority=1): target: self (same domain); alpn: h3, h2; ipv4hint: [192.0.2.1] ✓; ipv6hint: [2001:db8::1] ✓
 
   HTTP:
     [PASS] http://tavda.info/ -> 302 Moved Temporarily (IPv4)
            -> https://tavda.info/
-           Server: 87.120.92.93
+           Server: 192.0.2.1
     [PASS] http://tavda.info/ -> 302 Moved Temporarily (IPv6)
            -> https://tavda.info/
-           Server: 2a0b:4141:820:78a::2
+           Server: 2001:db8::1
 
   HTTPS:
     [PASS] https://tavda.info/ -> 200 OK (HTTP/2, IPv4)
            Alt-Svc: h3=":443";ma=86400
-           Server: 87.120.92.93
+           Server: 192.0.2.1
     [PASS] https://tavda.info/ -> 200 OK (HTTP/2, IPv6)
            Alt-Svc: h3=":443";ma=86400
-           Server: 2a0b:4141:820:78a::2
+           Server: 2001:db8::1
     [PASS] https://tavda.info/ -> 200 OK (HTTP/3, IPv4)
            Alt-Svc: h3=":443";ma=86400
-           Server: 87.120.92.93
+           Server: 192.0.2.1
     [PASS] https://tavda.info/ -> 200 OK (HTTP/3, IPv6)
            Alt-Svc: h3=":443";ma=86400
-           Server: 2a0b:4141:820:78a::2
+           Server: 2001:db8::1
 
 --- Summary ---
 All 9 check(s) passed
