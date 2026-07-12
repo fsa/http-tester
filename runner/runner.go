@@ -75,7 +75,7 @@ func Run(cfg *config.DomainConfig, resolverAddr string, stats *checker.Stats) er
 					Domain:  cfg.Name,
 					Passed:  true,
 					Warning: true,
-					Details: fmt.Sprintf("Found %d IPv4 addresses, testing only system-selected (%s). Set test_all_ips: true to test all.", len(ipv4s), ipv4s[0]),
+					Details: fmt.Sprintf("Found %d IPv4 addresses, testing only system-selected (%s). Use --web.test-all-ips to test all.", len(ipv4s), ipv4s[0]),
 				}}})
 			}
 			if len(ipv6s) > 1 {
@@ -85,7 +85,7 @@ func Run(cfg *config.DomainConfig, resolverAddr string, stats *checker.Stats) er
 					Domain:  cfg.Name,
 					Passed:  true,
 					Warning: true,
-					Details: fmt.Sprintf("Found %d IPv6 addresses, testing only system-selected (%s). Set test_all_ips: true to test all.", len(ipv6s), ipv6s[0]),
+					Details: fmt.Sprintf("Found %d IPv6 addresses, testing only system-selected (%s). Use --web.test-all-ips to test all.", len(ipv6s), ipv6s[0]),
 				}}})
 			}
 		}
