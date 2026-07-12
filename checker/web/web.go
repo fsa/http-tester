@@ -30,25 +30,49 @@ func RunAutoChecks(domain string, ipv4s, ipv6s []string, testAllIPs bool, hasHTT
 
 	// Filter IPs based on local connectivity from host check
 	if len(ipv4s) > 0 && !stats.HasLocalIPv4() {
-		results = append(results, &checker.Result{
-			Checker: "web-info",
-			Group:   "HTTP",
-			Domain:  domain,
-			Passed:  true,
-			Info:    true,
-			Details: "IPv4 not available on this host — skipping IPv4 tests",
-		})
+		if httpMode != "no" {
+			results = append(results, &checker.Result{
+				Checker: "web-info",
+				Group:   "HTTP",
+				Domain:  domain,
+				Passed:  true,
+				Info:    true,
+				Details: "IPv4 not available on this host — skipping IPv4 tests",
+			})
+		}
+		if httpsMode != "no" {
+			results = append(results, &checker.Result{
+				Checker: "web-info",
+				Group:   "HTTPS",
+				Domain:  domain,
+				Passed:  true,
+				Info:    true,
+				Details: "IPv4 not available on this host — skipping IPv4 tests",
+			})
+		}
 		ipv4s = nil
 	}
 	if len(ipv6s) > 0 && !stats.HasLocalIPv6() {
-		results = append(results, &checker.Result{
-			Checker: "web-info",
-			Group:   "HTTPS",
-			Domain:  domain,
-			Passed:  true,
-			Info:    true,
-			Details: "IPv6 not available on this host — skipping IPv6 tests",
-		})
+		if httpMode != "no" {
+			results = append(results, &checker.Result{
+				Checker: "web-info",
+				Group:   "HTTP",
+				Domain:  domain,
+				Passed:  true,
+				Info:    true,
+				Details: "IPv6 not available on this host — skipping IPv6 tests",
+			})
+		}
+		if httpsMode != "no" {
+			results = append(results, &checker.Result{
+				Checker: "web-info",
+				Group:   "HTTPS",
+				Domain:  domain,
+				Passed:  true,
+				Info:    true,
+				Details: "IPv6 not available on this host — skipping IPv6 tests",
+			})
+		}
 		ipv6s = nil
 	}
 
