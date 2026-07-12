@@ -173,7 +173,6 @@ Testing: tavda.net
   Web: HTTP(redirect), HTTPS(any)
 
 Test Results
-Resolver: 8.8.8.8:53
 
   DNS:
     [PASS] tavda.net resolved
@@ -183,13 +182,17 @@ Resolver: 8.8.8.8:53
 
   HTTP:
     [PASS] http://tavda.net/ -> 301 Moved Permanently (IPv4)
+           -> https://tavda.net/
+           Server: 185.199.108.153
     [PASS] http://tavda.net/ -> 301 Moved Permanently (IPv6)
+           -> https://tavda.net/
+           Server: 2606:50c0:8000::153
 
   HTTPS:
     [PASS] https://tavda.net/ -> 200 OK (HTTP/2, IPv4)
+           Server: 185.199.108.153
     [PASS] https://tavda.net/ -> 200 OK (HTTP/2, IPv6)
-    [PASS] https://tavda.net/ -> 200 OK (HTTP/3, IPv4)
-    [PASS] https://tavda.net/ -> 200 OK (HTTP/3, IPv6)
+           Server: 2606:50c0:8000::153
 
 --- Summary ---
 All 6 check(s) passed
