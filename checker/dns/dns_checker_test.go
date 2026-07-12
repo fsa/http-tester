@@ -142,6 +142,14 @@ func TestConsistencyCheck(t *testing.T) {
 				{Priority: 1, Target: ".", ALPN: []string{"h2", "h3"}, IPv4Hint: []string{"185.199.108.153"}, IPv6Hint: []string{"2606:50c0:8000::153"}},
 			},
 		},
+		// Domain with mismatched HTTPS hint — IPv6Hint differs from AAAA
+		"tavda.mismatch": {
+			A:    []string{"185.199.108.153"},
+			AAAA: []string{"2606:50c0:8000::153"},
+			HTTPS: []fakeHTTPSRecord{
+				{Priority: 1, Target: ".", ALPN: []string{"h2", "h3"}, IPv4Hint: []string{"185.199.108.153"}, IPv6Hint: []string{"2001:db8::9999"}},
+			},
+		},
 	}
 
 	addr, stop := startTestDNSServer(t, zones)
@@ -151,12 +159,14 @@ func TestConsistencyCheck(t *testing.T) {
 	r := &Resolver{server: addr, client: &mdns.Client{Timeout: 5 * time.Second}}
 
 	tests := []struct {
-		name    string
-		domain  string
-		wantMin int
+		name         string
+		domain       string
+		wantMin      int
+		wantWarnings bool
 	}{
-		{"tavda.info no HTTPS", "tavda.info", 1},
-		{"tavda.org has HTTPS", "tavda.org", 1},
+		{"tavda.info no HTTPS", "tavda.info", 1, false},
+		{"tavda.org has HTTPS", "tavda.org", 1, false},
+		{"tavda.mismatch hint differs from AAAA", "tavda.mismatch", 1, true},
 	}
 
 	for _, tt := range tests {
@@ -166,12 +176,17 @@ func TestConsistencyCheck(t *testing.T) {
 			if len(stats.Results) < tt.wantMin {
 				t.Errorf("len(results) = %d, want >= %d", len(stats.Results), tt.wantMin)
 			}
+
+			hasWarning := false
 			for _, rr := range stats.Results {
 				for _, res := range rr.Results {
-					if res.Group != "DNS" {
-						t.Errorf("Group = %q, want %q", res.Group, "DNS")
+					if res.Warning {
+						hasWarning = true
 					}
 				}
+			}
+			if hasWarning != tt.wantWarnings {
+				t.Errorf("hasWarning = %v, want %v", hasWarning, tt.wantWarnings)
 			}
 		})
 	}

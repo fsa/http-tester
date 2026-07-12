@@ -264,6 +264,7 @@ func applyResult(r *checker.Result, prefix string, ar analyzeResult) {
 		r.Passed = false
 		r.Details = prefix + ": " + strings.Join(ar.errors, "; ")
 	} else if len(ar.warnings) > 0 {
+		r.Warning = true
 		r.Details = prefix + ": " + strings.Join(ar.warnings, "; ")
 	} else if len(ar.info) > 0 {
 		r.Details = prefix + ": " + strings.Join(ar.info, "; ")
