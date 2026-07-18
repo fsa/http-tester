@@ -9,16 +9,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
-	"unicode"
 
 	"http-tester/checker"
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 )
-
-const maxBodySize = 512 * 1024 // 512 KB max body size for consistency check
 
 // RunAutoChecks performs automatic web checks:
 // - Port 80: HTTP/1.1 with httpMode
@@ -223,20 +219,20 @@ func checkPort(domain, ipVer, ip string, port int, scheme, protocol, mode string
 	transport := &http.Transport{
 		DialContext:           dialContext(port, ip),
 		Protocols:             protocols,
-		ResponseHeaderTimeout: 10 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: checker.DefaultResponseTimeout,
+		TLSHandshakeTimeout:   checker.DefaultTLSHandshake,
 	}
 
 	if scheme == "https" {
 		transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), checker.DefaultRequestTimeout)
 	defer cancel()
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   15 * time.Second,
+		Timeout:   checker.DefaultRequestTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -280,7 +276,7 @@ func checkPort(domain, ipVer, ip string, port int, scheme, protocol, mode string
 	}
 	// Store body for consistency check (only for 200 OK)
 	if resp.StatusCode == 200 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, checker.MaxBodySizeForCheck))
 		result.Body = body
 	}
 	return result
@@ -295,7 +291,7 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 		Passed:  false,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), checker.DefaultRequestTimeout)
 	defer cancel()
 
 	dialAddr := net.JoinHostPort(ip, "443")
@@ -313,7 +309,7 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   15 * time.Second,
+		Timeout:   checker.DefaultRequestTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -350,7 +346,7 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 	}
 	// Store body for consistency check (only for 200 OK)
 	if resp.StatusCode == 200 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, checker.MaxBodySizeForCheck))
 		result.Body = body
 	}
 	return result
@@ -359,7 +355,7 @@ func checkHTTP3(domain, ipVer, ip string) *checker.Result {
 func dialContext(port int, ip string) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		resolvedAddr := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
-		dialer := &net.Dialer{Timeout: 10 * time.Second}
+		dialer := &net.Dialer{Timeout: checker.DefaultDialTimeout}
 		return dialer.DialContext(ctx, "tcp", resolvedAddr)
 	}
 }
@@ -370,194 +366,4 @@ func ipLabel(base, ip string, testAllIPs bool, count int) string {
 		return base + ":" + ip
 	}
 	return base
-}
-
-// wordFreq builds a frequency map of words from input bytes
-func wordFreq(data []byte) map[string]int {
-	freq := make(map[string]int)
-	words := strings.FieldsFunc(string(data), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	})
-	for _, w := range words {
-		w = strings.ToLower(w)
-		if len(w) >= 3 {
-			freq[w]++
-		}
-	}
-	return freq
-}
-
-// compareWordMaps compares two word frequency maps and returns the ratio of matching words
-func compareWordMaps(a, b map[string]int) float64 {
-	if len(a) == 0 && len(b) == 0 {
-		return 1.0
-	}
-	// Union of all unique words
-	union := make(map[string]bool)
-	for w := range a {
-		union[w] = true
-	}
-	for w := range b {
-		union[w] = true
-	}
-	// Count words present in both maps
-	match := 0
-	for w := range union {
-		if a[w] > 0 && b[w] > 0 {
-			match++
-		}
-	}
-	return float64(match) / float64(len(union))
-}
-
-// CheckConsistency compares response bodies from different protocols and warns on significant differences
-func CheckConsistency(results []*checker.Result) []*checker.Result {
-	// Collect results with 200 OK status and body
-	type entry struct {
-		checker string
-		body    []byte
-	}
-	var entries []entry
-	for _, r := range results {
-		if r.Passed && r.Body != nil && len(r.Body) > 1024 { // skip small responses (under 1KB)
-			entries = append(entries, entry{checker: r.Checker, body: r.Body})
-		}
-	}
-
-	if len(entries) < 2 {
-		return nil
-	}
-
-	// Compare all pairs
-	var warnings []*checker.Result
-	for i := 0; i < len(entries); i++ {
-		for j := i + 1; j < len(entries); j++ {
-			freqA := wordFreq(entries[i].body)
-			freqB := wordFreq(entries[j].body)
-			similarity := compareWordMaps(freqA, freqB)
-
-			// Check size ratio
-			sizeA := len(entries[i].body)
-			sizeB := len(entries[j].body)
-			sizeRatio := 1.0
-			if sizeA > 0 && sizeB > 0 {
-				if sizeA > sizeB {
-					sizeRatio = float64(sizeA) / float64(sizeB)
-				} else {
-					sizeRatio = float64(sizeB) / float64(sizeA)
-				}
-			}
-
-			// Warn if similarity is low or size differs significantly
-			// Thresholds are intentionally relaxed to avoid false positives
-			// from sites with A/B testing, localization, or minor content variations
-			if similarity < 0.60 || sizeRatio > 3.0 {
-				warnings = append(warnings, &checker.Result{
-					Checker: "consistency",
-					Group:   "Consistency",
-					Domain:  entries[i].checker,
-					Passed:  false,
-					Warning: true,
-					Details: fmt.Sprintf("different content detected between %s and %s (word overlap: %.0f%%, size ratio: %.1fx)",
-						entries[i].checker, entries[j].checker, similarity*100, sizeRatio),
-				})
-			}
-		}
-	}
-
-	return warnings
-}
-
-// CheckStatusConsistency checks if all HTTP/HTTPS responses have consistent status types.
-// HTTP and HTTPS are checked separately.
-// For HTTP: all responses should have the same status (e.g., all 200 or all 301).
-// For HTTPS: all responses should have the same status.
-// Failed responses are ignored (already reported as FAIL).
-func CheckStatusConsistency(results []*checker.Result) []*checker.Result {
-	// Separate HTTP and HTTPS checks
-	httpStatuses := make(map[string][]string) // status -> list of checkers
-	httpsStatuses := make(map[string][]string)
-
-	for _, r := range results {
-		if !r.Passed {
-			continue // skip failed responses
-		}
-		status := parseStatusType(r.Details)
-		if status == "" {
-			continue
-		}
-
-		checkerName := r.Checker
-		if strings.HasPrefix(checkerName, "http-ipv") {
-			// HTTP check (port 80): http-ipv4, http-ipv6
-			httpStatuses[status] = append(httpStatuses[status], checkerName)
-		} else if strings.HasPrefix(checkerName, "https-") {
-			// HTTPS check (port 443): https-http2-ipv4, https-http2-ipv6, https-http3-ipv4, https-http3-ipv6
-			httpsStatuses[status] = append(httpsStatuses[status], checkerName)
-		}
-	}
-
-	var warnings []*checker.Result
-
-	// Check HTTP consistency
-	if len(httpStatuses) > 1 {
-		var parts []string
-		for status, checkers := range httpStatuses {
-			parts = append(parts, fmt.Sprintf("%s (%s)", status, strings.Join(checkers, ", ")))
-		}
-		warnings = append(warnings, &checker.Result{
-			Checker: "http-status-consistency",
-			Group:   "Consistency",
-			Domain:  "",
-			Passed:  false,
-			Warning: true,
-			Details: fmt.Sprintf("inconsistent HTTP responses: %s",
-				strings.Join(parts, " vs ")),
-		})
-	}
-
-	// Check HTTPS consistency
-	if len(httpsStatuses) > 1 {
-		var parts []string
-		for status, checkers := range httpsStatuses {
-			parts = append(parts, fmt.Sprintf("%s (%s)", status, strings.Join(checkers, ", ")))
-		}
-		warnings = append(warnings, &checker.Result{
-			Checker: "https-status-consistency",
-			Group:   "Consistency",
-			Domain:  "",
-			Passed:  false,
-			Warning: true,
-			Details: fmt.Sprintf("inconsistent HTTPS responses: %s",
-				strings.Join(parts, " vs ")),
-		})
-	}
-
-	return warnings
-}
-
-// parseStatusType extracts a normalized status type from Details string
-// e.g. "http-ipv4 http://example.com/ -> 200 OK" returns "200"
-func parseStatusType(details string) string {
-	// Find "-> XXX " pattern
-	idx := strings.Index(details, "-> ")
-	if idx < 0 {
-		return ""
-	}
-	statusStr := details[idx+4:]
-	// Extract status code (first 3 digits)
-	if len(statusStr) < 3 {
-		return ""
-	}
-	code := statusStr[:3]
-	switch code {
-	case "200":
-		return "200"
-	case "301":
-		return "301"
-	case "302":
-		return "302"
-	default:
-		return code
-	}
 }

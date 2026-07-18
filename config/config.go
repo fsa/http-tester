@@ -229,3 +229,39 @@ func validateWebChecks(w *WebChecks, prefix string) error {
 	}
 	return nil
 }
+
+// WebModes returns the HTTP and HTTPS modes, defaulting to "any" if not configured.
+func (d *DomainConfig) WebModes() (httpMode, httpsMode string) {
+	httpMode = "any"
+	httpsMode = "any"
+	if d.Web != nil {
+		if d.Web.HTTP != "" {
+			httpMode = string(d.Web.HTTP)
+		}
+		if d.Web.HTTPS != "" {
+			httpsMode = string(d.Web.HTTPS)
+		}
+	}
+	return httpMode, httpsMode
+}
+
+// HasHTTPSCheck reports whether an HTTPS DNS check is configured.
+func (d *DomainConfig) HasHTTPSCheck() bool {
+	return d.DNS != nil && d.DNS.HTTPS != ""
+}
+
+// HTTPSCheckMode returns the HTTPS DNS check mode as a string.
+func (d *DomainConfig) HTTPSCheckMode() string {
+	if d.DNS != nil {
+		return string(d.DNS.HTTPS)
+	}
+	return ""
+}
+
+// TestAllIPs reports whether all resolved IPs should be tested.
+func (d *DomainConfig) TestAllIPs() bool {
+	if d.Web != nil {
+		return d.Web.TestAllIPs
+	}
+	return false
+}

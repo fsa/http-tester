@@ -3,7 +3,6 @@ package dns
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"http-tester/checker"
 	"http-tester/config"
@@ -31,7 +30,7 @@ func (c *DNSChecker) Name() string {
 }
 
 func (c *DNSChecker) Check(domain string, stats *checker.Stats) *DNSResult {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), checker.DefaultResponseTimeout)
 	defer cancel()
 
 	result := &checker.Result{

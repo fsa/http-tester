@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"http-tester/checker"
+	"http-tester/checker/util"
 	"http-tester/config"
 
 	mdns "github.com/miekg/dns"
@@ -25,7 +25,7 @@ func (c *HTTPSChecker) Name() string {
 }
 
 func (c *HTTPSChecker) Check(domain string, mode config.DNSRecordCheck, stats *checker.Stats) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), checker.DefaultResponseTimeout)
 	defer cancel()
 
 	result := &checker.Result{
@@ -163,7 +163,7 @@ func parseHTTPSRecord(h *mdns.HTTPS) HTTPSRecordInfo {
 
 // ConsistencyCheck performs comprehensive HTTPS record validation per RFC 9460
 func ConsistencyCheck(domain string, resolver *Resolver, stats *checker.Stats) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), checker.DefaultRequestTimeout)
 	defer cancel()
 
 	// 1. Resolve A/AAAA for the domain
@@ -335,7 +335,7 @@ func analyzeServiceMode(domain string, rec *HTTPSRecordInfo, a4s, a6s []string) 
 
 	// Hints
 	if rec.HasHint4 {
-		overlap := hasOverlap(a4s, rec.IPv4Hint) || hasOverlap(a6s, rec.IPv4Hint)
+		overlap := util.HasOverlap(a4s, rec.IPv4Hint) || util.HasOverlap(a6s, rec.IPv4Hint)
 		if overlap {
 			r.info = append(r.info, fmt.Sprintf("ipv4hint: %v ✓", rec.IPv4Hint))
 		} else {
@@ -343,7 +343,7 @@ func analyzeServiceMode(domain string, rec *HTTPSRecordInfo, a4s, a6s []string) 
 		}
 	}
 	if rec.HasHint6 {
-		overlap := hasOverlap(a6s, rec.IPv6Hint) || hasOverlap(a4s, rec.IPv6Hint)
+		overlap := util.HasOverlap(a6s, rec.IPv6Hint) || util.HasOverlap(a4s, rec.IPv6Hint)
 		if overlap {
 			r.info = append(r.info, fmt.Sprintf("ipv6hint: %v ✓", rec.IPv6Hint))
 		} else {
@@ -385,15 +385,3 @@ func resolveIPs(ctx context.Context, resolver *Resolver, domain string) (ipv4s, 
 	return ipv4s, ipv6s, nil
 }
 
-func hasOverlap(a, b []string) bool {
-	set := make(map[string]bool, len(a))
-	for _, s := range a {
-		set[s] = true
-	}
-	for _, s := range b {
-		if set[s] {
-			return true
-		}
-	}
-	return false
-}

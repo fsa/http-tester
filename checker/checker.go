@@ -24,10 +24,6 @@ type Result struct {
 	Body        []byte // normalized response body for consistency check
 }
 
-type Checker interface {
-	Name() string
-	Check(domain string) ([]*Result, error)
-}
 
 type RunResult struct {
 	Domain  string

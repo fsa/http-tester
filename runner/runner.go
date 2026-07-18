@@ -41,26 +41,12 @@ func Run(cfg *config.DomainConfig, resolverAddr string, stats *checker.Stats) er
 
 	// Run automatic HTTP checks if enabled
 	if cfg.Web != nil || cfg.HasWeb {
-		hasHTTPSCheck := cfg.DNS != nil && cfg.DNS.HTTPS != ""
-		httpsCheckMode := ""
-		if cfg.DNS != nil {
-			httpsCheckMode = string(cfg.DNS.HTTPS)
-		}
-		httpMode := "any"
-		httpsMode := "any"
-		if cfg.Web != nil {
-			if cfg.Web.HTTP != "" {
-				httpMode = string(cfg.Web.HTTP)
-			}
-			if cfg.Web.HTTPS != "" {
-				httpsMode = string(cfg.Web.HTTPS)
-			}
-		}
+		httpMode, httpsMode := cfg.WebModes()
+		hasHTTPSCheck := cfg.HasHTTPSCheck()
+		httpsCheckMode := cfg.HTTPSCheckMode()
+		testAllIPs := cfg.TestAllIPs()
+
 		var ipv4s, ipv6s []string
-		testAllIPs := false
-		if cfg.Web != nil {
-			testAllIPs = cfg.Web.TestAllIPs
-		}
 		if dnsResult != nil {
 			ipv4s = dnsResult.IPv4s
 			ipv6s = dnsResult.IPv6s

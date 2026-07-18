@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"time"
+
+	"http-tester/checker"
 
 	mdns "github.com/miekg/dns"
 )
@@ -25,7 +26,7 @@ type Resolver struct {
 // Returns an error if the address is invalid or the server is unreachable.
 func NewResolver(addr string) (*Resolver, error) {
 	r := &Resolver{
-		client: &mdns.Client{Timeout: 5 * time.Second},
+		client: &mdns.Client{Timeout: checker.DefaultDNSClientTimeout},
 	}
 	if addr != "" {
 		parsed, err := parseAddr(addr)
@@ -71,7 +72,7 @@ func parseAddr(addr string) (string, error) {
 
 // probe sends a DNS query to verify the resolver can respond.
 func (r *Resolver) probe() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), checker.DefaultResolverProbe)
 	defer cancel()
 
 	m := new(mdns.Msg)
